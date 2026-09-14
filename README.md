@@ -75,6 +75,20 @@ silently degrade to `any` and you get `TS7031: implicitly has an 'any' type` on 
 arguments — with no indication of the real cause. A packed tarball installs as a real
 directory and resolves correctly.
 
+## Testing the tools
+
+```bash
+npm test      # headless Chrome
+```
+
+`src/app/game/game.tools.spec.ts` uses `ng-webmcp-compat/testing`, which installs an
+in-memory `document.modelContext` — so the tools are tested through the real
+registration path with no browser support for WebMCP and no polyfill.
+
+It deliberately goes through `webmcp.invoke(...)` rather than calling `execute`
+directly. Calling `execute` yourself skips `runInInjectionContext`, so every
+`inject()` in a tool would fail in production while the test stayed green.
+
 ## Notes on the code
 
 - **`src/app/game/game-store.ts`** knows nothing about WebMCP. Exposing an app to an
