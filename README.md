@@ -87,6 +87,13 @@ That last one is why the bridge listens for `toolchange` on both the document *a
 the model context: the polyfill dispatches it only on the context, so a
 document-only listener never notifies.
 
+## The inspector
+
+`src/main.ts` mounts `mountWebMcpDevtools()` behind `isDevMode()` and a dynamic
+import. Press **Ctrl/Cmd + Shift + M** to open it: live tool list, schemas,
+schema-prefilled arguments, and a call log. Run `make_move` from the panel and watch
+the board update — same state, different door in.
+
 ## Testing the tools
 
 ```bash

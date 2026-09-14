@@ -1,3 +1,4 @@
+import {isDevMode} from '@angular/core';
 import {bootstrapApplication} from '@angular/platform-browser';
 import {createWebMcpBridge} from 'ng-webmcp-compat/bridge';
 import {installWebMcpPolyfill} from 'ng-webmcp-compat/polyfill';
@@ -30,5 +31,14 @@ installWebMcpPolyfill()
     });
     bridge.start();
     console.info('[webmcp] JSON-RPC bridge listening on channel "mcp-default"');
+  })
+  .then(async () => {
+    // The inspector: Ctrl/Cmd + Shift + M. The DYNAMIC import is what keeps it out
+    // of the production bundle — a static import would pull it into main.js whether
+    // or not isDevMode() is true.
+    if (isDevMode()) {
+      const {mountWebMcpDevtools} = await import('ng-webmcp-compat/devtools');
+      mountWebMcpDevtools();
+    }
   })
   .catch((err) => console.error(err));
