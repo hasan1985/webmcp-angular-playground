@@ -75,6 +75,18 @@ silently degrade to `any` and you get `TS7031: implicitly has an 'any' type` on 
 arguments — with no indication of the real cause. A packed tarball installs as a real
 directory and resolves correctly.
 
+## The JSON-RPC bridge
+
+`src/main.ts` also starts `createWebMcpBridge()`, which exposes the same tools over
+MCP/JSON-RPC on the `mcp-default` postMessage channel. Verified end to end in Chrome:
+`initialize` negotiates `2025-11-25`, `tools/list` returns all three tools with their
+full JSON Schema, `tools/call` really plays a move, and
+`notifications/tools/list_changed` fires as you navigate.
+
+That last one is why the bridge listens for `toolchange` on both the document *and*
+the model context: the polyfill dispatches it only on the context, so a
+document-only listener never notifies.
+
 ## Testing the tools
 
 ```bash

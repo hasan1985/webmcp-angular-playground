@@ -1,4 +1,5 @@
 import {bootstrapApplication} from '@angular/platform-browser';
+import {createWebMcpBridge} from 'ng-webmcp-compat/bridge';
 import {installWebMcpPolyfill} from 'ng-webmcp-compat/polyfill';
 
 import {App} from './app/app';
@@ -18,5 +19,16 @@ installWebMcpPolyfill()
   .then((backing) => {
     console.info(`[webmcp] backed by: ${backing}`);
     return bootstrapApplication(App, appConfig);
+  })
+  .then(() => {
+    // Exposes the same tools over MCP/JSON-RPC so a browser extension or the
+    // @mcp-b local relay can reach them from outside the page — the one thing
+    // document.modelContext alone cannot do.
+    const bridge = createWebMcpBridge({
+      allowedOrigins: [window.location.origin],
+      serverInfo: {name: 'ng-webmcp-playground', version: '0.0.0'},
+    });
+    bridge.start();
+    console.info('[webmcp] JSON-RPC bridge listening on channel "mcp-default"');
   })
   .catch((err) => console.error(err));
