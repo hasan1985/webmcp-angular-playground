@@ -1,1 +1,43 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  --bg: #fbfbfa;
+  --surface: #ffffff;
+  --surface-2: #f6f6f4;
+  --border: #e4e4e0;
+  --muted: #76756f;
+  --accent: #b4501f;
+  --accent-2: #2f6f5e;
+  --accent-soft: #f6ece6;
+  --danger: #b02525;
+  --danger-soft: #fbeaea;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #18181a;
+    --surface: #212124;
+    --surface-2: #1c1c1f;
+    --border: #33333a;
+    --muted: #9a9aa2;
+    --accent: #e08b5e;
+    --accent-2: #6fbfa6;
+    --accent-soft: #2c2320;
+    --danger: #e08585;
+    --danger-soft: #2e2020;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: #1a1a1a;
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  body { color: #ececed; }
+}
+
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
