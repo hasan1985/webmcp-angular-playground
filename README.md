@@ -44,6 +44,12 @@ npm install
 npm start          # http://localhost:4200
 ```
 
+The polyfill is installed via `installWebMcpPolyfill()` from
+`ng-webmcp-compat/polyfill` in `src/main.ts`, awaited **before** `bootstrapApplication`
+— tools register during bootstrap, so anything that installs the API asynchronously
+has to finish first. Use a `.then` chain, not top-level `await`: Angular's default
+browserslist targets reject it.
+
 Playing by hand needs nothing. The chat panel needs an Anthropic API key, entered
 at runtime and kept in that tab's `sessionStorage`. It is sent straight from the
 browser to the API (`dangerouslyAllowBrowser`), which is fine for a local demo and
