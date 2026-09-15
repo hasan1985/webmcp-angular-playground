@@ -16,8 +16,21 @@ export class AgentTurn {
   /** When off, `request()` is a no-op. Bound to the checkbox on the game page. */
   readonly enabled = signal(false);
 
-  /** True while a requested turn is running, so the UI can say so. */
+  /**
+   * True while ANY agent turn is in flight, however it started — typed into the
+   * chat or requested by the page.
+   *
+   * The board locks on this rather than on `playing`, because a turn cannot be
+   * known in advance not to move: the agent holds `make_move` and may call it
+   * whatever you asked. "You go first" is a typed turn that moves.
+   */
   readonly running = signal(false);
+
+  /**
+   * True only while a turn this service asked for is running — i.e. the agent is
+   * answering a move. Drives the wording, not the lock.
+   */
+  readonly playing = signal(false);
 
   private readonly requests = new Subject<string>();
   readonly requests$ = this.requests.asObservable();

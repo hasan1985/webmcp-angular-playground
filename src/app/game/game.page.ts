@@ -19,8 +19,10 @@ import {GameStore} from './game-store';
           {{ store.winner() }} wins
         } @else if (store.isDraw()) {
           Draw
-        } @else if (agent.running()) {
+        } @else if (agent.playing()) {
           {{ store.turn() }} is thinking…
+        } @else if (agent.running()) {
+          agent is working…
         } @else {
           {{ store.turn() }} to move
         }

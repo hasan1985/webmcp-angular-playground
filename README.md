@@ -45,7 +45,12 @@ agent → make_move({square: 0, player: "O"})
 ```
 
 While the agent is mid-turn the board is locked — every square and Reset disabled,
-dimmed, `aria-busy`, and the status reads *"O is thinking…"*. Without that you can
+dimmed, `aria-busy`, and the status says so.
+
+That applies to **any** agent turn, not just one the board asked for. Typing "you go
+first" is a turn that moves, and the lock has to cover it: the agent holds
+`make_move` and may call it whatever you asked, so a turn cannot be known in advance
+not to touch the board. Without that you can
 click into the gap and race the agent's own `make_move`, or reset the board out
 from under a call that is already in flight. The autoplay checkbox stays live, so
 you are never stuck waiting on a turn you no longer want.

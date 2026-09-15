@@ -217,11 +217,11 @@ export class Chat {
    */
   private async runRequestedTurn(context: string): Promise<void> {
     if (!readKey() || this.busy()) return;
-    this.agentTurn.running.set(true);
+    this.agentTurn.playing.set(true);
     try {
       await this.runTurn(context);
     } finally {
-      this.agentTurn.running.set(false);
+      this.agentTurn.playing.set(false);
     }
   }
 
@@ -240,6 +240,8 @@ export class Chat {
 
     this.append({kind: 'user', text});
     this.busy.set(true);
+    // Locks the board for the duration, whichever path started this turn.
+    this.agentTurn.running.set(true);
 
     try {
       this.history = await runTurn({
@@ -259,6 +261,7 @@ export class Chat {
       this.append({kind: 'error', text: describeError(error)});
     } finally {
       this.busy.set(false);
+      this.agentTurn.running.set(false);
       void this.refreshTools();
     }
   }
