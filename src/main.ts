@@ -38,7 +38,12 @@ installWebMcpPolyfill()
     // or not isDevMode() is true.
     if (isDevMode()) {
       const {mountWebMcpDevtools} = await import('webmcp-angular/devtools');
-      mountWebMcpDevtools();
+      const slot = document.getElementById('webmcp-devtools-slot');
+      // Docked into its own column so it does not cover the chat panel. Falls
+      // back to floating if the slot is not in the DOM for some reason.
+      mountWebMcpDevtools(
+        slot ? {position: 'inline', container: slot} : {position: 'bottom-left'},
+      );
     }
   })
   .catch((err) => console.error(err));

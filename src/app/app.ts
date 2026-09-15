@@ -18,12 +18,22 @@ import {Chat} from './chat/chat';
         <router-outlet />
       </main>
       <app-chat />
+      <!-- The inspector docks here rather than floating: it used to cover the
+           chat panel, since both were anchored bottom-right. -->
+      <aside id="webmcp-devtools-slot" class="devtools"></aside>
     </div>
   `,
   styles: `
     .shell {
-      display: grid; grid-template-columns: 1fr minmax(20rem, 26rem);
+      display: grid;
+      grid-template-columns: 1fr minmax(19rem, 24rem) minmax(19rem, 24rem);
       height: 100vh;
+    }
+    .devtools {
+      border-left: 1px solid var(--border);
+      background: var(--surface-2);
+      overflow: hidden;
+      min-width: 0;
     }
     main { padding: 2rem; overflow-y: auto; }
     nav {
@@ -34,9 +44,15 @@ import {Chat} from './chat/chat';
     nav a { color: var(--muted); text-decoration: none; font-size: .9rem; }
     nav a:hover { color: inherit; }
     nav a.active { color: var(--accent); font-weight: 600; }
+    @media (max-width: 82rem) {
+      /* Not enough room for three columns — drop the inspector under the chat. */
+      .shell { grid-template-columns: 1fr minmax(19rem, 24rem); }
+      .devtools { grid-column: 2; border-left: 1px solid var(--border); min-height: 24rem; }
+    }
     @media (max-width: 60rem) {
       .shell { grid-template-columns: 1fr; height: auto; }
       main { padding: 1.25rem; }
+      .devtools { grid-column: 1; border-left: 0; border-top: 1px solid var(--border); }
     }
   `,
 })
