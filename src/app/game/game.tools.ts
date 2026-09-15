@@ -1,5 +1,5 @@
 import {inject} from '@angular/core';
-import {webMcpTool} from 'ng-webmcp-compat/strict';
+import {webMcpTool} from 'webmcp-angular/strict';
 
 import {GameStore, type Player} from './game-store';
 

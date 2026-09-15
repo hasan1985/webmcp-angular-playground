@@ -1,5 +1,5 @@
 import {ChangeDetectionStrategy, Component, Injectable, inject, signal} from '@angular/core';
-import {declareExperimentalWebMcpTool} from 'ng-webmcp-compat';
+import {declareExperimentalWebMcpTool} from 'webmcp-angular';
 
 @Injectable({providedIn: 'root'})
 export class NotesStore {

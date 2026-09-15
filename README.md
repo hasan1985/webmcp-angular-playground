@@ -2,10 +2,10 @@
 
 A sample Angular app that exposes its own features to an AI agent via
 [WebMCP](https://webmachinelearning.github.io/webmcp/), using
-[`ng-webmcp-compat`](../ng-webmcp-compat).
+[`webmcp-angular`](../webmcp-angular).
 
 It is a **separate project on purpose.** A demo inside the library workspace would
-resolve `ng-webmcp-compat` through the TypeScript path mapping and import raw
+resolve `webmcp-angular` through the TypeScript path mapping and import raw
 source — never exercising what actually ships: the ng-packagr output, the entry
 points, the `exports` map, the peer ranges. This app installs the built package the
 way a user does, which is a class of bug the library's parity suite cannot catch.
@@ -45,7 +45,7 @@ npm start          # http://localhost:4200
 ```
 
 The polyfill is installed via `installWebMcpPolyfill()` from
-`ng-webmcp-compat/polyfill` in `src/main.ts`, awaited **before** `bootstrapApplication`
+`webmcp-angular/polyfill` in `src/main.ts`, awaited **before** `bootstrapApplication`
 — tools register during bootstrap, so anything that installs the API asynchronously
 has to finish first. Use a `.then` chain, not top-level `await`: Angular's default
 browserslist targets reject it.
@@ -62,15 +62,15 @@ longer exists.
 ## Install it from a tarball, not `file:`
 
 ```bash
-cd ../ng-webmcp-compat && npx ng build ng-webmcp-compat
-cd dist/ng-webmcp-compat && npm pack --pack-destination /tmp
-cd ../../../ng-webmcp-playground && npm i /tmp/ng-webmcp-compat-0.0.1.tgz
+cd ../webmcp-angular && npx ng build webmcp-angular
+cd dist/webmcp-angular && npm pack --pack-destination /tmp
+cd ../../../ng-webmcp-playground && npm i /tmp/webmcp-angular-0.0.1.tgz
 ```
 
-`npm i file:../ng-webmcp-compat/dist/ng-webmcp-compat` **symlinks**, and that breaks
-secondary entry points. `ng-webmcp-compat/strict` imports its types from the primary
+`npm i file:../webmcp-angular/dist/webmcp-angular` **symlinks**, and that breaks
+secondary entry points. `webmcp-angular/strict` imports its types from the primary
 entry by package name; TypeScript resolves symlinks to their real path, so from
-`dist/ng-webmcp-compat/strict/` the self-reference cannot be found. The types
+`dist/webmcp-angular/strict/` the self-reference cannot be found. The types
 silently degrade to `any` and you get `TS7031: implicitly has an 'any' type` on tool
 arguments — with no indication of the real cause. A packed tarball installs as a real
 directory and resolves correctly.
@@ -100,7 +100,7 @@ the board update — same state, different door in.
 npm test      # headless Chrome
 ```
 
-`src/app/game/game.tools.spec.ts` uses `ng-webmcp-compat/testing`, which installs an
+`src/app/game/game.tools.spec.ts` uses `webmcp-angular/testing`, which installs an
 in-memory `document.modelContext` — so the tools are tested through the real
 registration path with no browser support for WebMCP and no polyfill.
 

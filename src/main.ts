@@ -1,7 +1,7 @@
 import {isDevMode} from '@angular/core';
 import {bootstrapApplication} from '@angular/platform-browser';
-import {createWebMcpBridge} from 'ng-webmcp-compat/bridge';
-import {installWebMcpPolyfill} from 'ng-webmcp-compat/polyfill';
+import {createWebMcpBridge} from 'webmcp-angular/bridge';
+import {installWebMcpPolyfill} from 'webmcp-angular/polyfill';
 
 import {App} from './app/app';
 import {appConfig} from './app/app.config';
@@ -37,7 +37,7 @@ installWebMcpPolyfill()
     // of the production bundle — a static import would pull it into main.js whether
     // or not isDevMode() is true.
     if (isDevMode()) {
-      const {mountWebMcpDevtools} = await import('ng-webmcp-compat/devtools');
+      const {mountWebMcpDevtools} = await import('webmcp-angular/devtools');
       mountWebMcpDevtools();
     }
   })

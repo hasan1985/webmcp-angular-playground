@@ -4,7 +4,7 @@ import {
   provideZonelessChangeDetection,
 } from '@angular/core';
 import {provideRouter} from '@angular/router';
-import {provideExperimentalWebMcpTools} from 'ng-webmcp-compat';
+import {provideExperimentalWebMcpTools} from 'webmcp-angular';
 
 import {routes} from './app.routes';
 import {getBoardTool, makeMoveTool, resetGameTool} from './game/game.tools';

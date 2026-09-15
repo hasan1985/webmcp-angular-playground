@@ -1,6 +1,6 @@
 import {TestBed} from '@angular/core/testing';
-import {provideExperimentalWebMcpTools} from 'ng-webmcp-compat';
-import {installWebMcpTestHarness, type WebMcpHarness} from 'ng-webmcp-compat/testing';
+import {provideExperimentalWebMcpTools} from 'webmcp-angular';
+import {installWebMcpTestHarness, type WebMcpHarness} from 'webmcp-angular/testing';
 
 import {GameStore} from './game-store';
 import {getBoardTool, makeMoveTool, resetGameTool} from './game.tools';

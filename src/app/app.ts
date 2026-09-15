@@ -11,7 +11,7 @@ import {Chat} from './chat/chat';
     <div class="shell">
       <main>
         <nav>
-          <strong>ng-webmcp-compat</strong>
+          <strong>webmcp-angular</strong>
           <a routerLink="/game" routerLinkActive="active">Game</a>
           <a routerLink="/notes" routerLinkActive="active">Notes</a>
         </nav>
