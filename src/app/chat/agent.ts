@@ -100,6 +100,13 @@ export interface RunOptions {
    * OpenAI-compatible endpoint will not work, the shapes are different.
    */
   baseUrl?: string;
+  /**
+   * Identifies this conversation to a backend that supports threading.
+   * Anthropic itself ignores it — the real API is stateless and the client
+   * replays history, which this code does regardless. A proxy can use it to
+   * relay each turn into one long-lived session instead.
+   */
+  conversationId?: string;
   model?: string;
   history: Anthropic.MessageParam[];
   userMessage: string;
@@ -119,11 +126,13 @@ export interface RunOptions {
  * Returns the updated history so the caller can carry it into the next turn.
  */
 export async function runTurn(options: RunOptions): Promise<Anthropic.MessageParam[]> {
-  const {apiKey, baseUrl, model = DEFAULT_MODEL, userMessage, onEntry, signal} = options;
+  const {apiKey, baseUrl, conversationId, model = DEFAULT_MODEL, userMessage, onEntry, signal} =
+    options;
 
   const client = new Anthropic({
     apiKey,
     ...(baseUrl ? {baseURL: baseUrl} : {}),
+    ...(conversationId ? {defaultHeaders: {'X-Conversation-Id': conversationId}} : {}),
     // Required to call the API from a browser. Acceptable here because the key is
     // the user's own, entered at runtime and never persisted beyond this tab —
     // see the warning in the chat panel. Do NOT do this in a product: ship a

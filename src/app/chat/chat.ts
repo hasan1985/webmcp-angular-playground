@@ -143,6 +143,14 @@ export class Chat {
   protected readonly hasKey = signal(readKey() !== null);
 
   private history: Anthropic.MessageParam[] = [];
+
+  /**
+   * One id per chat, minted here rather than returned by the server: the Messages
+   * API response has nowhere to carry a session id, so a stock client would drop
+   * it. A backend that threads can key a session off this; Anthropic ignores it.
+   * Resetting the chat mints a new one, which starts a new session.
+   */
+  private conversationId = newConversationId();
   private readonly host = inject(ElementRef<HTMLElement>);
 
   constructor() {
@@ -177,6 +185,7 @@ export class Chat {
     this.hasKey.set(false);
     this.entries.set([]);
     this.history = [];
+    this.conversationId = newConversationId();
   }
 
   protected format(value: unknown): string {
@@ -197,6 +206,7 @@ export class Chat {
       this.history = await runTurn({
         apiKey,
         baseUrl: readUrl() ?? undefined,
+        conversationId: this.conversationId,
         model: DEFAULT_MODEL,
         history: this.history,
         userMessage: text,
@@ -223,6 +233,10 @@ export class Chat {
       if (log) log.scrollTop = log.scrollHeight;
     });
   }
+}
+
+function newConversationId(): string {
+  return `conv-${crypto.randomUUID()}`;
 }
 
 function readUrl(): string | null {
