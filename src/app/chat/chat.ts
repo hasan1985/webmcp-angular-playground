@@ -1,4 +1,4 @@
-import {ChangeDetectionStrategy, Component, signal} from '@angular/core';
+import {ChangeDetectionStrategy, Component, ElementRef, inject, signal} from '@angular/core';
 import type Anthropic from '@anthropic-ai/sdk';
 
 import {DEFAULT_MODEL, describeError, runTurn, type Entry} from './agent';
@@ -143,6 +143,7 @@ export class Chat {
   protected readonly hasKey = signal(readKey() !== null);
 
   private history: Anthropic.MessageParam[] = [];
+  private readonly host = inject(ElementRef<HTMLElement>);
 
   constructor() {
     // Keep the visible tool count honest as the user navigates. `toolchange`
@@ -215,6 +216,12 @@ export class Chat {
 
   private append(entry: Entry): void {
     this.entries.update((list) => [...list, entry]);
+    // Keep the newest entry in view; a long transcript otherwise leaves the reader
+    // staring at the top of the conversation.
+    queueMicrotask(() => {
+      const log = this.host.nativeElement.querySelector('.log');
+      if (log) log.scrollTop = log.scrollHeight;
+    });
   }
 }
 

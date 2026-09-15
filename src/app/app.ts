@@ -29,6 +29,14 @@ import {Chat} from './chat/chat';
       grid-template-columns: 1fr minmax(19rem, 24rem) minmax(19rem, 24rem);
       height: 100vh;
     }
+    /* Custom elements default to display:inline, so a grid row never constrains
+       them. Without this the chat grows with its transcript, pushes its own input
+       past the bottom of the viewport, and becomes unusable. */
+    app-chat, .devtools {
+      display: block;
+      min-height: 0;
+      overflow: hidden;
+    }
     .devtools {
       border-left: 1px solid var(--border);
       background: var(--surface-2);
