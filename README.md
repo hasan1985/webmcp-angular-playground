@@ -1,4 +1,4 @@
-# ng-webmcp-playground
+# webmcp-angular-playground
 
 A sample Angular app that exposes its own features to an AI agent via
 [WebMCP](https://webmachinelearning.github.io/webmcp/), using
@@ -64,7 +64,7 @@ longer exists.
 ```bash
 cd ../webmcp-angular && npx ng build webmcp-angular
 cd dist/webmcp-angular && npm pack --pack-destination /tmp
-cd ../../../ng-webmcp-playground && npm i /tmp/webmcp-angular-0.0.1.tgz
+cd ../../../webmcp-angular-playground && npm i /tmp/webmcp-angular-0.0.1.tgz
 ```
 
 `npm i file:../webmcp-angular/dist/webmcp-angular` **symlinks**, and that breaks

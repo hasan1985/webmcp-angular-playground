@@ -27,7 +27,7 @@ installWebMcpPolyfill()
     // document.modelContext alone cannot do.
     const bridge = createWebMcpBridge({
       allowedOrigins: [window.location.origin],
-      serverInfo: {name: 'ng-webmcp-playground', version: '0.0.0'},
+      serverInfo: {name: 'webmcp-angular-playground', version: '0.0.0'},
     });
     bridge.start();
     console.info('[webmcp] JSON-RPC bridge listening on channel "mcp-default"');

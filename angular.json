@@ -6,7 +6,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "ng-webmcp-playground": {
+    "webmcp-angular-playground": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -59,10 +59,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "ng-webmcp-playground:build:production"
+              "buildTarget": "webmcp-angular-playground:build:production"
             },
             "development": {
-              "buildTarget": "ng-webmcp-playground:build:development"
+              "buildTarget": "webmcp-angular-playground:build:development"
             }
           },
           "defaultConfiguration": "development"
