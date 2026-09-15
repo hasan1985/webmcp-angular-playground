@@ -44,6 +44,12 @@ agent → make_move({square: 0, player: "O"})
  safest reply and avoids the fork traps an edge move allows."
 ```
 
+While the agent is mid-turn the board is locked — every square and Reset disabled,
+dimmed, `aria-busy`, and the status reads *"O is thinking…"*. Without that you can
+click into the gap and race the agent's own `make_move`, or reset the board out
+from under a call that is already in flight. The autoplay checkbox stays live, so
+you are never stuck waiting on a turn you no longer want.
+
 Two details worth copying if you build something similar:
 
 - **Only human actions trigger it.** The nudge fires from the component's click

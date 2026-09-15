@@ -14,21 +14,23 @@ import {GameStore} from './game-store';
         <code>get_board</code>, <code>make_move</code> and <code>reset_game</code> tools.
       </p>
 
-      <div class="status" [class.over]="store.isOver()">
+      <div class="status" [class.over]="store.isOver()" [class.busy]="agent.running()">
         @if (store.winner()) {
           {{ store.winner() }} wins
         } @else if (store.isDraw()) {
           Draw
+        } @else if (agent.running()) {
+          {{ store.turn() }} is thinking…
         } @else {
           {{ store.turn() }} to move
         }
       </div>
 
-      <div class="board">
+      <div class="board" [class.locked]="agent.running()" [attr.aria-busy]="agent.running()">
         @for (cell of store.board(); track $index) {
           <button
             class="square"
-            [disabled]="cell !== null || store.isOver()"
+            [disabled]="cell !== null || store.isOver() || agent.running()"
             (click)="play($index)"
             [attr.aria-label]="'Square ' + $index + (cell ? ', ' + cell : ', empty')"
           >
@@ -39,13 +41,12 @@ import {GameStore} from './game-store';
       </div>
 
       <div class="controls">
-        <button class="reset" (click)="store.reset()">Reset</button>
+        <button class="reset" [disabled]="agent.running()" (click)="store.reset()">Reset</button>
 
         <label class="autoplay">
           <input type="checkbox" [checked]="agent.enabled()"
                  (change)="agent.enabled.set($any($event.target).checked)" />
           Agent plays back
-          @if (agent.running()) { <span class="thinking">thinking…</span> }
         </label>
       </div>
     </section>
@@ -59,6 +60,20 @@ import {GameStore} from './game-store';
       border-radius: .5rem; background: var(--surface); display: inline-block;
     }
     .status.over { background: var(--accent-soft); color: var(--accent); }
+    .status.busy { color: var(--accent); }
+    .status.busy::after {
+      content: ''; display: inline-block; width: .4em; height: .4em;
+      margin-left: .5em; border-radius: 50%; background: currentColor;
+      animation: pulse 1s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) {
+      .status.busy::after { animation: none; opacity: .7; }
+    }
+
+    /* Locked while the agent moves: a click here would race its make_move call. */
+    .board.locked { opacity: .55; }
+    .board.locked .square { cursor: wait; }
     .board {
       display: grid; grid-template-columns: repeat(3, 1fr);
       gap: .5rem; max-width: 18rem;
@@ -81,6 +96,7 @@ import {GameStore} from './game-store';
       margin-top: 1.25rem; display: flex; align-items: center;
       gap: 1.25rem; flex-wrap: wrap;
     }
+    .reset:disabled, .square:disabled { cursor: not-allowed; }
     .reset {
       padding: .5rem 1rem; border-radius: .5rem;
       border: 1px solid var(--border); background: transparent;
@@ -90,7 +106,6 @@ import {GameStore} from './game-store';
       display: flex; align-items: center; gap: .45rem;
       font-size: .875rem; color: var(--muted); cursor: pointer;
     }
-    .thinking { color: var(--accent); font-style: italic; }
   `,
 })
 export class GamePage {
