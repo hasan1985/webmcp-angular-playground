@@ -25,6 +25,38 @@ does unregister. Rejected moves come back as descriptions (`Square 4 is already
 taken by X. Empty squares are: 0, 1, 2, 3, 5, 6, 7, 8.`), not exceptions, which is
 what lets an agent self-correct.
 
+## The page can drive the agent too
+
+Tick **Agent plays back** under the board and the agent answers every move you make.
+
+This is the other direction from a chat: nothing is typed. Clicking a square builds
+a context string — what you played, the board, whose turn it is — and hands it to
+the agent, which calls `make_move` and explains itself.
+
+```
+you click square 4
+   ↓
+"I just played X on square 4.  <board>  Make one move as O using make_move…"
+   ↓
+agent → make_move({square: 0, player: "O"})
+   ↓
+"I played O in the top-left corner — against a center X, taking a corner is the
+ safest reply and avoids the fork traps an edge move allows."
+```
+
+Two details worth copying if you build something similar:
+
+- **Only human actions trigger it.** The nudge fires from the component's click
+  handler, not from `GameStore` and not from the tool — otherwise the agent's own
+  move would prompt it again, forever.
+- **The game and the chat do not know about each other.** `AgentTurn` is a one-way
+  channel carrying a plain string. The game pushes context; the chat consumes it.
+  The chat still knows nothing about tic-tac-toe.
+
+Including the board in the context is a deliberate shortcut: the agent *could* call
+`get_board` first, and does on its first turn, but handing it the state saves a
+round trip. It still has to call `make_move` to actually play.
+
 ## The one rule
 
 **The chat may only learn about tools through `document.modelContext.getTools()`,

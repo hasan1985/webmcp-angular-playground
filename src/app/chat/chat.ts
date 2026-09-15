@@ -1,6 +1,15 @@
-import {ChangeDetectionStrategy, Component, ElementRef, inject, signal} from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ElementRef,
+  inject,
+  signal,
+} from '@angular/core';
+import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import type Anthropic from '@anthropic-ai/sdk';
 
+import {AgentTurn} from '../agent-turn';
 import {DEFAULT_MODEL, describeError, runTurn, type Entry} from './agent';
 import {discoverTools, isWebMcpAvailable} from './webmcp-bridge';
 
@@ -152,12 +161,19 @@ export class Chat {
    */
   private conversationId = newConversationId();
   private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly agentTurn = inject(AgentTurn);
 
   constructor() {
     // Keep the visible tool count honest as the user navigates. `toolchange`
     // fires on the document when any tool registers or unregisters.
     void this.refreshTools();
     document.addEventListener('toolchange', () => void this.refreshTools());
+
+    // A feature elsewhere in the app can hand the agent a turn. The chat does not
+    // know or care which one — it just receives the context and runs it.
+    this.agentTurn.requests$
+      .pipe(takeUntilDestroyed(inject(DestroyRef)))
+      .subscribe((context) => void this.runRequestedTurn(context));
   }
 
   private async refreshTools(): Promise<void> {
@@ -192,13 +208,36 @@ export class Chat {
     return JSON.stringify(value, null, 2);
   }
 
+  /**
+   * A turn the page asked for rather than the user typing.
+   *
+   * Silently ignored when there is no key or a turn is already running: a board
+   * click should never pop an error at someone who has not set the chat up, and
+   * clicking twice quickly should not start two turns against the same history.
+   */
+  private async runRequestedTurn(context: string): Promise<void> {
+    if (!readKey() || this.busy()) return;
+    this.agentTurn.running.set(true);
+    try {
+      await this.runTurn(context);
+    } finally {
+      this.agentTurn.running.set(false);
+    }
+  }
+
   protected async send(event: Event): Promise<void> {
     event.preventDefault();
     const text = this.draft().trim();
-    const apiKey = readKey();
-    if (!text || !apiKey || this.busy()) return;
+    if (!text || !readKey() || this.busy()) return;
 
     this.draft.set('');
+    await this.runTurn(text);
+  }
+
+  private async runTurn(text: string): Promise<void> {
+    const apiKey = readKey();
+    if (!apiKey) return;
+
     this.append({kind: 'user', text});
     this.busy.set(true);
 

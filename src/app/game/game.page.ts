@@ -1,5 +1,6 @@
 import {ChangeDetectionStrategy, Component, inject} from '@angular/core';
 
+import {AgentTurn} from '../agent-turn';
 import {GameStore} from './game-store';
 
 @Component({
@@ -37,7 +38,16 @@ import {GameStore} from './game-store';
         }
       </div>
 
-      <button class="reset" (click)="store.reset()">Reset</button>
+      <div class="controls">
+        <button class="reset" (click)="store.reset()">Reset</button>
+
+        <label class="autoplay">
+          <input type="checkbox" [checked]="agent.enabled()"
+                 (change)="agent.enabled.set($any($event.target).checked)" />
+          Agent plays back
+          @if (agent.running()) { <span class="thinking">thinking…</span> }
+        </label>
+      </div>
     </section>
   `,
   styles: `
@@ -67,17 +77,45 @@ import {GameStore} from './game-store';
     }
     .x { color: var(--accent); }
     .o { color: var(--accent-2); }
+    .controls {
+      margin-top: 1.25rem; display: flex; align-items: center;
+      gap: 1.25rem; flex-wrap: wrap;
+    }
     .reset {
-      margin-top: 1.25rem; padding: .5rem 1rem; border-radius: .5rem;
+      padding: .5rem 1rem; border-radius: .5rem;
       border: 1px solid var(--border); background: transparent;
       color: inherit; cursor: pointer;
     }
+    .autoplay {
+      display: flex; align-items: center; gap: .45rem;
+      font-size: .875rem; color: var(--muted); cursor: pointer;
+    }
+    .thinking { color: var(--accent); font-style: italic; }
   `,
 })
 export class GamePage {
   protected readonly store = inject(GameStore);
+  protected readonly agent = inject(AgentTurn);
 
   protected play(square: number): void {
-    this.store.move(square, this.store.turn());
+    const player = this.store.turn();
+    const error = this.store.move(square, player);
+    if (error) return;
+
+    // Only after a *human* move. The agent's own moves go through the make_move
+    // tool, which never comes back here — otherwise it would answer itself in a
+    // loop until the board filled up.
+    if (this.store.isOver()) return;
+
+    this.agent.request(
+      [
+        `I just played ${player} on square ${square}.`,
+        '',
+        this.store.describe(),
+        '',
+        `Make one move as ${this.store.turn()} using the make_move tool, then say in one` +
+          ' short sentence what you played and why.',
+      ].join('\n'),
+    );
   }
 }
