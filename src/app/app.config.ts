@@ -4,7 +4,7 @@ import {
   provideZonelessChangeDetection,
 } from '@angular/core';
 import {provideRouter} from '@angular/router';
-import {provideExperimentalWebMcpTools} from 'webmcp-angular';
+import {provideWebMcpTools} from 'webmcp-angular';
 
 import {routes} from './app.routes';
 import {getBoardTool, makeMoveTool, resetGameTool} from './game/game.tools';
@@ -26,7 +26,7 @@ export const appConfig: ApplicationConfig = {
     //
     // One type parameter for the whole array, so every tool in a single call must
     // share one schema type. Tools with *different* input schemas have no valid S,
-    // and `provideExperimentalWebMcpTools([getBoardTool, makeMoveTool])` fails to
+    // and `provideWebMcpTools([getBoardTool, makeMoveTool])` fails to
     // compile — that is angular/angular#70125, still open.
     //
     // Passing each tool in its own call keeps every array homogeneous, so the
@@ -36,8 +36,8 @@ export const appConfig: ApplicationConfig = {
     // the typing that made the schema worth writing.
     //
     // Collapse these into one call if #70125 is ever fixed.
-    provideExperimentalWebMcpTools([getBoardTool]),
-    provideExperimentalWebMcpTools([makeMoveTool]),
-    provideExperimentalWebMcpTools([resetGameTool]),
+    provideWebMcpTools([getBoardTool]),
+    provideWebMcpTools([makeMoveTool]),
+    provideWebMcpTools([resetGameTool]),
   ],
 };

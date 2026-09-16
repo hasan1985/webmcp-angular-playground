@@ -1,5 +1,5 @@
 import {TestBed} from '@angular/core/testing';
-import {provideExperimentalWebMcpTools} from 'webmcp-angular';
+import {provideWebMcpTools} from 'webmcp-angular';
 import {installWebMcpTestHarness, type WebMcpHarness} from 'webmcp-angular/testing';
 
 import {GameStore} from './game-store';
@@ -24,9 +24,9 @@ describe('game tools', () => {
 
     TestBed.configureTestingModule({
       providers: [
-        provideExperimentalWebMcpTools([getBoardTool]),
-        provideExperimentalWebMcpTools([makeMoveTool]),
-        provideExperimentalWebMcpTools([resetGameTool]),
+        provideWebMcpTools([getBoardTool]),
+        provideWebMcpTools([makeMoveTool]),
+        provideWebMcpTools([resetGameTool]),
       ],
     });
 

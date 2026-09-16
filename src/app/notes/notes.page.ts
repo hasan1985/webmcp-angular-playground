@@ -1,5 +1,5 @@
 import {ChangeDetectionStrategy, Component, Injectable, inject, signal} from '@angular/core';
-import {declareExperimentalWebMcpTool} from 'webmcp-angular';
+import {declareWebMcpTool} from 'webmcp-angular';
 
 @Injectable({providedIn: 'root'})
 export class NotesStore {
@@ -27,7 +27,7 @@ export class NotesStore {
  * on `provideRouter`. Declaring the tools in the component ties them to the
  * component's own lifetime instead, which cleans up correctly on **every** version.
  *
- * The mechanism underneath: `declareExperimentalWebMcpTool` hangs an
+ * The mechanism underneath: `declareWebMcpTool` hangs an
  * `AbortController` off the injector's `DestroyRef` and passes its signal to
  * `registerTool`. The WebMCP spec has no `unregisterTool` — aborting that signal
  * *is* unregistration.
@@ -86,7 +86,7 @@ export class NotesPage {
 
   constructor() {
     // Registered now, unregistered when this component is destroyed.
-    declareExperimentalWebMcpTool({
+    declareWebMcpTool({
       name: 'list_notes',
       description: 'List every note currently saved on the notes page.',
       inputSchema: {type: 'object', properties: {}, required: []},
@@ -96,7 +96,7 @@ export class NotesPage {
       },
     });
 
-    declareExperimentalWebMcpTool({
+    declareWebMcpTool({
       name: 'add_note',
       description: 'Add a note to the notes page. Only available while the notes page is open.',
       inputSchema: {

@@ -157,7 +157,7 @@ directly. Calling `execute` yourself skips `runInInjectionContext`, so every
   agent should not mean rewriting the app; tools are a thin layer on services you have.
 - **Nothing validates agent input for you.** Neither the spec nor Angular checks
   arguments against `inputSchema` — it is a hint to the model, not a runtime guard.
-- **Each tool gets its own `provideExperimentalWebMcpTools` call.** One call per
+- **Each tool gets its own `provideWebMcpTools` call.** One call per
   array forces every tool in it to share a single schema type
   ([angular#70125](https://github.com/angular/angular/issues/70125)); separate calls
   keep each array homogeneous, so it all type-checks with no casts. See `app.config.ts`.
