@@ -4,12 +4,27 @@ import {discoverTools, runTool} from './webmcp-bridge';
 
 export const DEFAULT_MODEL = 'claude-opus-5';
 
+/**
+ * Conventional name for a tool carrying app-level context. Read once per chat
+ * session and folded into the system prompt — see `Chat.appContextFor()`.
+ */
+export const APP_CONTEXT_TOOL = 'about_this_app';
+
 const SYSTEM_PROMPT = `You are an assistant embedded in a web page. The page exposes its own
 capabilities to you as tools via WebMCP; the available tools change as the user navigates, so
 rely on the tool list you are given on each turn rather than remembering what existed earlier.
 
 Read state before you change it. If a tool call is rejected, the result explains why — read it
 and correct your next call rather than repeating the same one. Keep replies short.`;
+
+/**
+ * The prompt for a turn with tools switched off. Swapped together with the `tools`
+ * key: a tool-aware prompt with no tools makes the model offer to do things it
+ * cannot, or narrate calls it never made.
+ */
+const PLAIN_SYSTEM_PROMPT = `You are an assistant embedded in a web page. You cannot see or
+change anything on the page — you have no tools this turn. If the user asks about the page's
+state, say plainly that you cannot see it. Keep replies short.`;
 
 /**
  * Turns an SDK error into something a person can act on.
@@ -96,6 +111,13 @@ export type Entry =
 export interface RunOptions {
   apiKey: string;
   /**
+   * App-level context, read once when the chat session started. Goes in the system
+   * prompt rather than the transcript, so it is not repeated as the conversation
+   * grows and the model treats it as standing instruction rather than something the
+   * user said.
+   */
+  appContext?: string;
+  /**
    * Override the API host. Must speak the **Anthropic Messages API** — an
    * OpenAI-compatible endpoint will not work, the shapes are different.
    */
@@ -108,6 +130,11 @@ export interface RunOptions {
    */
   conversationId?: string;
   model?: string;
+  /**
+   * Whether to read the page's tools and send them. `false` sends no `tools` key at
+   * all (omitted, not an empty array) and the plain system prompt. Defaults to true.
+   */
+  useTools?: boolean;
   history: Anthropic.MessageParam[];
   userMessage: string;
   /** Called as the turn progresses, so the UI can stream activity in. */
@@ -126,8 +153,17 @@ export interface RunOptions {
  * Returns the updated history so the caller can carry it into the next turn.
  */
 export async function runTurn(options: RunOptions): Promise<Anthropic.MessageParam[]> {
-  const {apiKey, baseUrl, conversationId, model = DEFAULT_MODEL, userMessage, onEntry, signal} =
-    options;
+  const {
+    apiKey,
+    baseUrl,
+    conversationId,
+    appContext,
+    model = DEFAULT_MODEL,
+    useTools = true,
+    userMessage,
+    onEntry,
+    signal,
+  } = options;
 
   const client = new Anthropic({
     apiKey,
@@ -142,8 +178,10 @@ export async function runTurn(options: RunOptions): Promise<Anthropic.MessagePar
 
   const messages: Anthropic.MessageParam[] = [...options.history, {role: 'user', content: userMessage}];
 
-  // Re-discovered every turn: the tool list is live.
-  const tools = await discoverTools();
+  // Re-discovered every turn: the tool list is live. With tools off there is no
+  // read at all — the list is not needed.
+  const tools = useTools ? await discoverTools() : undefined;
+  const basePrompt = useTools ? SYSTEM_PROMPT : PLAIN_SYSTEM_PROMPT;
 
   // Bounded so a confused model cannot loop forever on the user's dime.
   for (let iteration = 0; iteration < 10; iteration++) {
@@ -151,8 +189,8 @@ export async function runTurn(options: RunOptions): Promise<Anthropic.MessagePar
       {
         model,
         max_tokens: 16000,
-        system: SYSTEM_PROMPT,
-        tools,
+        system: appContext ? `${basePrompt}\n\n---\n\n${appContext}` : basePrompt,
+        ...(tools ? {tools} : {}),
         messages,
       },
       {signal},

@@ -1,6 +1,5 @@
 import {isDevMode} from '@angular/core';
 import {bootstrapApplication} from '@angular/platform-browser';
-import {createWebMcpBridge} from 'webmcp-angular/bridge';
 import {installWebMcpPolyfill} from 'webmcp-angular/polyfill';
 
 import {App} from './app/app';
@@ -21,17 +20,9 @@ installWebMcpPolyfill()
     console.info(`[webmcp] backed by: ${backing}`);
     return bootstrapApplication(App, appConfig);
   })
-  .then(() => {
-    // Exposes the same tools over MCP/JSON-RPC so a browser extension or the
-    // @mcp-b local relay can reach them from outside the page — the one thing
-    // document.modelContext alone cannot do.
-    const bridge = createWebMcpBridge({
-      allowedOrigins: [window.location.origin],
-      serverInfo: {name: 'webmcp-angular-playground', version: '0.0.0'},
-    });
-    bridge.start();
-    console.info('[webmcp] JSON-RPC bridge listening on channel "mcp-default"');
-  })
+  // The JSON-RPC bridge — for agents OUTSIDE the page — is not started here. It is
+  // opt-in, behind the "External agents" switch in the header; see
+  // src/app/external-agents.ts. The in-page chat does not need it.
   .then(async () => {
     // The inspector: Ctrl/Cmd + Shift + M. The DYNAMIC import is what keeps it out
     // of the production bundle — a static import would pull it into main.js whether

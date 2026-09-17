@@ -45,8 +45,10 @@ import {GameStore} from './game-store';
       <div class="controls">
         <button class="reset" [disabled]="agent.running()" (click)="store.reset()">Reset</button>
 
-        <label class="autoplay">
+        <label class="autoplay" [class.off]="!agent.webMcpEnabled()"
+               [title]="agent.webMcpEnabled() ? '' : 'Enable WebMCP in the chat panel first'">
           <input type="checkbox" [checked]="agent.enabled()"
+                 [disabled]="!agent.webMcpEnabled()"
                  (change)="agent.enabled.set($any($event.target).checked)" />
           Agent plays back
         </label>
@@ -108,6 +110,7 @@ import {GameStore} from './game-store';
       display: flex; align-items: center; gap: .45rem;
       font-size: .875rem; color: var(--muted); cursor: pointer;
     }
+    .autoplay.off { opacity: .5; cursor: not-allowed; }
   `,
 })
 export class GamePage {

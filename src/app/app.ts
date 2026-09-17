@@ -1,7 +1,8 @@
-import {ChangeDetectionStrategy, Component} from '@angular/core';
+import {ChangeDetectionStrategy, Component, inject} from '@angular/core';
 import {RouterLink, RouterLinkActive, RouterOutlet} from '@angular/router';
 
 import {Chat} from './chat/chat';
+import {ExternalAgents} from './external-agents';
 
 @Component({
   selector: 'app-root',
@@ -14,6 +15,13 @@ import {Chat} from './chat/chat';
           <strong>webmcp-angular</strong>
           <a routerLink="/game" routerLinkActive="active">Game</a>
           <a routerLink="/notes" routerLinkActive="active">Notes</a>
+          <label class="external" [class.on]="external.listening()"
+                 title="Let agents outside the page — an extension, Claude Desktop, Cursor — reach these tools over MCP/JSON-RPC. The in-page chat does not need this.">
+            <input type="checkbox" [checked]="external.enabled()"
+                   (change)="external.enabled.set($any($event.target).checked)" />
+            External agents
+            <small>{{ external.listening() ? 'bridge listening' : 'off' }}</small>
+          </label>
         </nav>
         <router-outlet />
       </main>
@@ -52,6 +60,12 @@ import {Chat} from './chat/chat';
     nav a { color: var(--muted); text-decoration: none; font-size: .9rem; }
     nav a:hover { color: inherit; }
     nav a.active { color: var(--accent); font-weight: 600; }
+    .external {
+      display: inline-flex; align-items: center; gap: .4rem; margin-left: .5rem;
+      font-size: .8rem; color: var(--muted); cursor: pointer;
+    }
+    .external small { font-size: .7rem; opacity: .7; }
+    .external.on { color: var(--accent-2); }
     @media (max-width: 82rem) {
       /* Not enough room for three columns — drop the inspector under the chat. */
       .shell { grid-template-columns: 1fr minmax(19rem, 24rem); }
@@ -64,4 +78,6 @@ import {Chat} from './chat/chat';
     }
   `,
 })
-export class App {}
+export class App {
+  protected readonly external = inject(ExternalAgents);
+}

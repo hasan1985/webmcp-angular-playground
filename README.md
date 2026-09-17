@@ -17,7 +17,8 @@ way a user does, which is a class of bug the library's parity suite cannot catch
 |---|---|---|
 | **Game** (tic-tac-toe) | `get_board`, `make_move`, `reset_game` | App-lifetime tools; reading state before acting; **validation errors the agent can recover from** |
 | **Notes** | `list_notes`, `add_note` | **Page-scoped** tools — they appear and disappear as you navigate |
-| **Chat** | — | A BYO-key agent loop driven entirely by WebMCP discovery |
+| **Chat** | — | An **in-page agent**: a BYO-key loop driven entirely by WebMCP discovery |
+| **External agents** switch | — | Opt-in bridge for agents *outside* the page — off by default |
 
 Verified in Chrome: 3 tools on the game route, 5 on the notes route, back to 3 on
 return — the `DestroyRef → AbortController → registerTool({signal})` chain really
@@ -27,7 +28,14 @@ what lets an agent self-correct.
 
 ## The page can drive the agent too
 
-Tick **Agent plays back** under the board and the agent answers every move you make.
+The chat starts with WebMCP **off**: the model gets no tools and says so when asked
+about the board. Click **Enable WebMCP** and ask again — the page's tools now travel
+with every request, and the same question is answered by calling `get_board`. The
+switch starts a new chat each way; the inspector shows the tools registered either
+way, because the switch governs what the chat *sends*, not what the page *publishes*.
+
+Tick **Agent plays back** under the board (needs WebMCP enabled) and the agent answers
+every move you make.
 
 This is the other direction from a chat: nothing is typed. Clicking a square builds
 a context string — what you played, the board, whose turn it is — and hands it to
@@ -108,7 +116,13 @@ longer exists.
 cd ../webmcp-angular && npx ng build webmcp-angular
 cd dist/webmcp-angular && npm pack --pack-destination /tmp
 cd ../../../webmcp-angular-playground && npm i /tmp/webmcp-angular-0.0.1.tgz
+rm -rf .angular/cache     # ng serve's Vite pre-bundle is keyed by version, which never changes here
 ```
+
+That last line is ordinary Angular CLI behaviour, not anything WebMCP-specific — but
+reinstalling a tarball at the same version number is exactly the case the cache
+cannot see, so `ng build` passes while `ng serve` fails with *"does not provide an
+export named …"* on anything you renamed.
 
 `npm i file:../webmcp-angular/dist/webmcp-angular` **symlinks**, and that breaks
 secondary entry points. `webmcp-angular/strict` imports its types from the primary
@@ -118,12 +132,18 @@ silently degrade to `any` and you get `TS7031: implicitly has an 'any' type` on 
 arguments — with no indication of the real cause. A packed tarball installs as a real
 directory and resolves correctly.
 
-## The JSON-RPC bridge
+## External agents — the JSON-RPC bridge, opt-in
 
-`src/main.ts` also starts `createWebMcpBridge()`, which exposes the same tools over
-MCP/JSON-RPC on the `mcp-default` postMessage channel. Verified end to end in Chrome:
-`initialize` negotiates `2025-11-25`, `tools/list` returns all three tools with their
-full JSON Schema, `tools/call` really plays a move, and
+The chat is an *in-page* agent and never needs the bridge. The bridge is for agents
+*outside* the page — an extension, Claude Desktop, Cursor — that speak MCP over
+JSON-RPC and cannot see the page's JavaScript. Opening that door is the operator's
+decision, so it is **off by default**: tick **External agents** in the header and
+`src/app/external-agents.ts` dynamic-imports `webmcp-angular/bridge`, starts it on
+the `mcp-default` postMessage channel, and remembers the choice in `localStorage`.
+Untick and it stops, announcing `mcp-server-stopped`.
+
+Verified end to end in Chrome: `initialize` negotiates `2025-11-25`, `tools/list`
+returns all tools with their full JSON Schema, `tools/call` really plays a move, and
 `notifications/tools/list_changed` fires as you navigate.
 
 That last one is why the bridge listens for `toolchange` on both the document *and*
@@ -162,9 +182,9 @@ directly. Calling `execute` yourself skips `runInInjectionContext`, so every
   ([angular#70125](https://github.com/angular/angular/issues/70125)); separate calls
   keep each array homogeneous, so it all type-checks with no casts. See `app.config.ts`.
 - **Notes tools are declared in the component, not in route `providers`.** Route-level
-  environment injectors are not destroyed on navigation before Angular 22 — that is
-  what `withExperimentalAutoCleanupInjectors()` fixes. Component lifetime works on
-  every version.
+  environment injectors are not destroyed on navigation unless you opt in with
+  `withExperimentalAutoCleanupInjectors()`, which exists from Angular 21.1 (this app is
+  on 20). Component lifetime works on every version.
 - **The chat uses a manual tool loop**, not the SDK's tool runner: the runner wants
   local `run` functions declared up front, but these tools are discovered at runtime
   from the page.

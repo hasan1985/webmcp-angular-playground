@@ -10,8 +10,8 @@ import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import type Anthropic from '@anthropic-ai/sdk';
 
 import {AgentTurn} from '../agent-turn';
-import {DEFAULT_MODEL, describeError, runTurn, type Entry} from './agent';
-import {discoverTools, isWebMcpAvailable} from './webmcp-bridge';
+import {APP_CONTEXT_TOOL, DEFAULT_MODEL, describeError, runTurn, type Entry} from './agent';
+import {discoverTools, isWebMcpAvailable, runTool} from './webmcp-bridge';
 
 const KEY_STORAGE = 'anthropic-api-key';
 const URL_STORAGE = 'anthropic-base-url';
@@ -24,9 +24,25 @@ const URL_STORAGE = 'anthropic-base-url';
       <header>
         <h3>Agent</h3>
         <span class="tools" [title]="toolNames().join(', ')">
-          {{ toolNames().length }} tool{{ toolNames().length === 1 ? '' : 's' }} visible
+          {{ toolNames().length }} tool{{ toolNames().length === 1 ? '' : 's' }}
+          {{ webMcpEnabled() ? 'sent to the agent' : 'registered, not sent' }}
         </span>
       </header>
+
+      <div class="modebar">
+        <button type="button" class="mode" [class.on]="webMcpEnabled()"
+                [disabled]="busy()" (click)="toggleWebMcp()"
+                [attr.aria-pressed]="webMcpEnabled()">
+          {{ webMcpEnabled() ? 'Disable WebMCP' : 'Enable WebMCP' }}
+        </button>
+        <span class="modehint">
+          @if (webMcpEnabled()) {
+            The page's tools go with every request.
+          } @else {
+            Plain chat — the model gets no tools and cannot see the page.
+          }
+        </span>
+      </div>
 
       @if (!supported()) {
         <p class="warn">
@@ -77,8 +93,13 @@ const URL_STORAGE = 'anthropic-base-url';
             }
           } @empty {
             <p class="empty">
-              Try: <em>"what's on the board?"</em>, <em>"play X in the middle"</em>,
-              or <em>"beat me"</em>.
+              @if (webMcpEnabled()) {
+                Try: <em>"what's on the board?"</em>, <em>"play X in the middle"</em>,
+                or <em>"beat me"</em>.
+              } @else {
+                Ask <em>"what's on the board?"</em> now, then enable WebMCP and ask
+                again.
+              }
             </p>
           }
           @if (busy()) { <div class="msg bot pending">thinking…</div> }
@@ -89,7 +110,10 @@ const URL_STORAGE = 'anthropic-base-url';
                  [disabled]="busy()" placeholder="Ask the agent…" />
           <button type="submit" [disabled]="busy() || !draft().trim()">Send</button>
         </form>
-        <button class="forget" (click)="forgetKey()">Forget key</button>
+        <div class="sessionbar">
+          <button class="ghost" [disabled]="busy()" (click)="newChat()">New chat</button>
+          <button class="ghost" (click)="forgetKey()">Forget key</button>
+        </div>
       }
     </aside>
   `,
@@ -103,7 +127,14 @@ const URL_STORAGE = 'anthropic-base-url';
       gap: .5rem; padding: 1rem; border-bottom: 1px solid var(--border);
     }
     h3 { margin: 0; font-size: .95rem; }
-    .tools { font-size: .75rem; color: var(--muted); cursor: help; }
+    .tools { font-size: .75rem; color: var(--muted); cursor: help; text-align: right; }
+    .modebar {
+      display: flex; align-items: center; gap: .75rem; padding: .625rem 1rem;
+      border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .mode { font-size: .8rem; padding: .35rem .75rem; white-space: nowrap; }
+    .mode.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+    .modehint { font-size: .75rem; color: var(--muted); line-height: 1.4; }
     .log { flex: 1; overflow-y: auto; padding: 1rem; display: grid; gap: .625rem; align-content: start; }
     .empty { color: var(--muted); font-size: .85rem; line-height: 1.6; margin: 0; }
     .msg { padding: .5rem .75rem; border-radius: .625rem; font-size: .875rem; line-height: 1.5; white-space: pre-wrap; }
@@ -135,8 +166,9 @@ const URL_STORAGE = 'anthropic-base-url';
     }
     button:disabled { opacity: .5; cursor: default; }
     .warn { font-size: .75rem; color: var(--muted); line-height: 1.5; margin: 0; }
-    .forget {
-      margin: 0 1rem 1rem; font-size: .75rem; padding: .3rem .625rem;
+    .sessionbar { display: flex; gap: .5rem; margin: 0 1rem 1rem; }
+    .ghost {
+      flex: 1; font-size: .75rem; padding: .3rem .625rem;
       color: var(--muted); border-style: dashed;
     }
   `,
@@ -150,6 +182,7 @@ export class Chat {
   protected readonly busy = signal(false);
   protected readonly toolNames = signal<string[]>([]);
   protected readonly hasKey = signal(readKey() !== null);
+  protected readonly webMcpEnabled = inject(AgentTurn).webMcpEnabled;
 
   private history: Anthropic.MessageParam[] = [];
 
@@ -160,6 +193,15 @@ export class Chat {
    * Resetting the chat mints a new one, which starts a new session.
    */
   private conversationId = newConversationId();
+
+  /**
+   * App-level context, read once per session.
+   *
+   * `null` means not read yet; `''` means this page publishes none, and we should
+   * stop asking — otherwise every turn would spend a lookup discovering the same
+   * absence.
+   */
+  private appContext: string | null = null;
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly agentTurn = inject(AgentTurn);
 
@@ -195,13 +237,30 @@ export class Chat {
     this.hasKey.set(true);
   }
 
+  /**
+   * Flipping the switch starts a new session. A transcript that already holds
+   * `tool_use` / `tool_result` blocks cannot be replayed without a `tools` key, so
+   * the two modes never share a history.
+   */
+  protected toggleWebMcp(): void {
+    if (this.busy()) return;
+    this.webMcpEnabled.update((on) => !on);
+    this.newChat();
+  }
+
+  /** Starts a fresh session: new conversation id, empty history, context re-read. */
+  protected newChat(): void {
+    this.entries.set([]);
+    this.history = [];
+    this.conversationId = newConversationId();
+    this.appContext = null;
+  }
+
   protected forgetKey(): void {
     sessionStorage.removeItem(KEY_STORAGE);
     sessionStorage.removeItem(URL_STORAGE);
     this.hasKey.set(false);
-    this.entries.set([]);
-    this.history = [];
-    this.conversationId = newConversationId();
+    this.newChat();
   }
 
   protected format(value: unknown): string {
@@ -216,7 +275,7 @@ export class Chat {
    * clicking twice quickly should not start two turns against the same history.
    */
   private async runRequestedTurn(context: string): Promise<void> {
-    if (!readKey() || this.busy()) return;
+    if (!readKey() || this.busy() || !this.webMcpEnabled()) return;
     this.agentTurn.playing.set(true);
     try {
       await this.runTurn(context);
@@ -234,6 +293,31 @@ export class Chat {
     await this.runTurn(text);
   }
 
+  /**
+   * Reads app context once per chat session.
+   *
+   * Sessions live here, not in the page: WebMCP has no notion of one, so "the start
+   * of a conversation" is a thing only the client can know. Fetched through the
+   * normal tool path, so the chat still learns nothing about this app except through
+   * WebMCP.
+   */
+  private async appContextFor(): Promise<string | undefined> {
+    // With tools off the model is told it cannot see the page; describing the
+    // page to it anyway would contradict that.
+    if (!this.webMcpEnabled()) return undefined;
+    if (this.appContext !== null) return this.appContext || undefined;
+
+    const names = (await discoverTools()).map((t) => t.name);
+    if (!names.includes(APP_CONTEXT_TOOL)) {
+      this.appContext = '';
+      return undefined;
+    }
+
+    const {text, isError} = await runTool(APP_CONTEXT_TOOL, {});
+    this.appContext = isError ? '' : text;
+    return this.appContext || undefined;
+  }
+
   private async runTurn(text: string): Promise<void> {
     const apiKey = readKey();
     if (!apiKey) return;
@@ -248,7 +332,9 @@ export class Chat {
         apiKey,
         baseUrl: readUrl() ?? undefined,
         conversationId: this.conversationId,
+        appContext: await this.appContextFor(),
         model: DEFAULT_MODEL,
+        useTools: this.webMcpEnabled(),
         history: this.history,
         userMessage: text,
         onEntry: (entry) => this.append(entry),

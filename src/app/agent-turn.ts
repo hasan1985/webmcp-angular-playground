@@ -13,6 +13,17 @@ import {Subject} from 'rxjs';
  */
 @Injectable({providedIn: 'root'})
 export class AgentTurn {
+  /**
+   * The master switch: whether the chat sends the page's tools to the model at all.
+   *
+   * Off by default so the difference is observable — ask "what's on the board?"
+   * both ways. This governs what the chat *sends*, not what the page *registers*:
+   * tools stay on `document.modelContext` either way, and the inspector and any
+   * external MCP client keep seeing them. Lives here rather than in the chat so the
+   * game page can grey out "Agent plays back" when there is nothing to play with.
+   */
+  readonly webMcpEnabled = signal(false);
+
   /** When off, `request()` is a no-op. Bound to the checkbox on the game page. */
   readonly enabled = signal(false);
 
@@ -42,7 +53,7 @@ export class AgentTurn {
    * move would have it respond to itself, forever.
    */
   request(context: string): void {
-    if (!this.enabled()) return;
+    if (!this.enabled() || !this.webMcpEnabled()) return;
     this.requests.next(context);
   }
 }

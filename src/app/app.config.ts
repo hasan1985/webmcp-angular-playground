@@ -6,6 +6,7 @@ import {
 import {provideRouter} from '@angular/router';
 import {provideWebMcpTools} from 'webmcp-angular';
 
+import {aboutThisAppTool} from './app-context.tool';
 import {routes} from './app.routes';
 import {getBoardTool, makeMoveTool, resetGameTool} from './game/game.tools';
 
@@ -36,6 +37,7 @@ export const appConfig: ApplicationConfig = {
     // the typing that made the schema worth writing.
     //
     // Collapse these into one call if #70125 is ever fixed.
+    provideWebMcpTools([aboutThisAppTool]),
     provideWebMcpTools([getBoardTool]),
     provideWebMcpTools([makeMoveTool]),
     provideWebMcpTools([resetGameTool]),
