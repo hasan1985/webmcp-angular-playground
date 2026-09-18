@@ -470,7 +470,9 @@ export class Chat {
       // the model has seen.
       this.append({
         kind: 'error',
-        text: this.abort.signal.aborted ? 'Stopped.\n\nYour message was not sent.' : describeError(error),
+        text: this.abort.signal.aborted
+          ? 'Stopped.\n\nYour message was not sent.'
+          : describeError(error, readUrl() ?? undefined),
       });
     } finally {
       this.streaming.set(null);

@@ -34,19 +34,37 @@ state, say plainly that you cannot see it. Keep replies short.`;
  * key was rejected, by whom, or where to get a working one, and the most common
  * cause here is pasting a credential that was never an Anthropic API key at all.
  */
-export function describeError(error: unknown): string {
+export function describeError(error: unknown, baseUrl?: string): string {
   const status = (error as {status?: number})?.status;
+  const host = baseUrl ? new URL(baseUrl).host : 'api.anthropic.com';
+
+  if (status === 401 && baseUrl) {
+    // A custom endpoint — a local proxy — rejected the key. Its key is whatever it
+    // was started with, not an Anthropic key.
+    return [
+      `${host} rejected this key.`,
+      '',
+      'That is your custom API URL, so the key has to be the one that server was',
+      'started with (for the local proxy: its PROXY_API_KEY) — not an Anthropic key.',
+      '',
+      'Click "Forget key" and connect again with the matching key. If the URL was',
+      'meant to be blank, clear it and use an Anthropic key instead.',
+      '',
+      'Your message was not sent — retype it once the key is working.',
+    ].join('\n');
+  }
 
   if (status === 401) {
     return [
       'api.anthropic.com rejected this key.',
       '',
-      'This panel calls Anthropic directly — it does not go through any local proxy,',
-      'so a proxy key (like the one you set as PROXY_API_KEY) or a Claude Code login',
-      'will always fail here. Those are different credentials entirely.',
+      'The API URL field is blank, so this panel called Anthropic directly. A proxy',
+      'key (like PROXY_API_KEY) or a Claude Code login will always fail there —',
+      'those are different credentials entirely.',
       '',
-      'You need a key from console.anthropic.com → API keys. It starts with',
-      '"sk-ant-api03-" and is billed separately from a Claude subscription.',
+      'Either set the API URL to your proxy (for the local one: http://127.0.0.1:8080)',
+      'and use its key, or use a key from console.anthropic.com → API keys, which',
+      'starts with "sk-ant-api03-" and is billed separately from a subscription.',
       '',
       'Your message was not sent — retype it once the key is working.',
     ].join('\n');
