@@ -192,7 +192,10 @@ directly. Calling `execute` yourself skips `runInInjectionContext`, so every
   endpoint answers `400` to `stream: true` (the local proxy does) it falls back to
   `create()` for the rest of the session. Tokens grow one bubble as they arrive;
   `Stop` aborts the turn. Auto-scroll follows new content only while you are at the
-  bottom — scroll up to read and a **↓ new messages** pill appears instead.
+  bottom — scroll up to read and a **↓ new messages** pill appears instead. The
+  grip above the prompt box drags it taller (arrow keys work too; double-click
+  resets to auto-grow), and the height is remembered per browser. Plain pointer
+  events with capture — a resize handle is not what CDK's drag-and-drop is for.
 - **Assistant replies are rendered as markdown** by `src/app/chat/markdown.ts`, a
   60-line renderer that escapes everything first and never emits anchors or raw
   HTML. `marked` would be the largest thing in this demo.

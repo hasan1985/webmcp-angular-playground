@@ -119,8 +119,15 @@ const URL_STORAGE = 'anthropic-base-url';
         }
         </div>
 
+        <div class="grip" role="separator" aria-orientation="horizontal" tabindex="0"
+             aria-label="Resize the prompt box. Drag, or use the arrow keys; double-click to reset."
+             [attr.aria-valuenow]="promptHeight() ?? 0"
+             (pointerdown)="gripDown($event)" (pointermove)="gripMove($event)"
+             (pointerup)="gripUp($event)" (pointercancel)="gripUp($event)"
+             (dblclick)="promptHeight.set(null)" (keydown)="gripKey($event)"></div>
         <form class="ask" (submit)="send($event)">
           <textarea #box rows="1" [value]="draft()" (input)="onDraft($any($event.target))"
+                    [style.height.px]="promptHeight()"
                     (keydown.enter)="onEnter($event)" [disabled]="busy()"
                     placeholder="Ask the agent… (Shift+Enter for a new line)"></textarea>
           @if (busy()) {
@@ -197,9 +204,20 @@ const URL_STORAGE = 'anthropic-base-url';
     .tool code { color: var(--accent-2); }
     pre { margin: .5rem 0 0; white-space: pre-wrap; word-break: break-word; color: var(--muted); }
     .result { color: inherit; }
-    form.ask { display: flex; gap: .5rem; padding: 1rem; border-top: 1px solid var(--border); align-items: flex-end; }
+    .grip {
+      height: 10px; margin-top: -5px; cursor: row-resize; touch-action: none;
+      position: relative; z-index: 1; border-top: 1px solid var(--border);
+    }
+    .grip::after {
+      content: ''; position: absolute; left: 50%; top: 3px; width: 2.5rem; height: 3px;
+      transform: translateX(-50%); border-radius: 999px; background: var(--border);
+      transition: background .15s;
+    }
+    .grip:hover::after, .grip:focus-visible::after, .grip.dragging::after { background: var(--accent); }
+    .grip:focus-visible { outline: none; }
+    form.ask { display: flex; gap: .5rem; padding: 1rem; align-items: flex-end; }
     form.ask textarea {
-      flex: 1; min-width: 0; resize: none; max-height: 10rem; overflow-y: auto;
+      flex: 1; min-width: 0; resize: none; overflow-y: auto;
       padding: .5rem .75rem; border-radius: .5rem; border: 1px solid var(--border);
       background: var(--surface); color: inherit; font: inherit; line-height: 1.4;
     }
@@ -238,6 +256,12 @@ export class Chat {
   protected readonly streaming = signal<string | null>(null);
   /** True while the log is scrolled to (near) the bottom, so new content should keep it there. */
   protected readonly pinned = signal(true);
+  /**
+   * Height of the prompt box when the reader has dragged the grip, in px; `null`
+   * means auto-grow with the text. Remembered per browser.
+   */
+  protected readonly promptHeight = signal<number | null>(readPromptHeight());
+  private drag: {startY: number; startHeight: number} | null = null;
 
   private readonly log = viewChild<ElementRef<HTMLElement>>('log');
   private readonly box = viewChild<ElementRef<HTMLTextAreaElement>>('box');
@@ -311,8 +335,55 @@ export class Chat {
 
   protected onDraft(box: HTMLTextAreaElement): void {
     this.draft.set(box.value);
+    if (this.promptHeight() !== null) return;      // a dragged height wins over auto-grow
     box.style.height = 'auto';
     box.style.height = `${Math.min(box.scrollHeight, 160)}px`;
+  }
+
+  // ── Resizing the prompt box ──────────────────────────────────────────────
+  // Plain pointer events with capture: works for mouse and touch, survives the
+  // pointer leaving the grip, and needs no library. Dragging up makes the box
+  // taller; double-click returns to auto-grow.
+
+  private static readonly MIN_PROMPT = 40;
+  private static readonly MAX_PROMPT = 400;
+
+  protected gripDown(event: PointerEvent): void {
+    const box = this.box()?.nativeElement;
+    if (!box) return;
+    (event.target as HTMLElement).setPointerCapture(event.pointerId);
+    (event.target as HTMLElement).classList.add('dragging');
+    this.drag = {startY: event.clientY, startHeight: box.getBoundingClientRect().height};
+    event.preventDefault();
+  }
+
+  protected gripMove(event: PointerEvent): void {
+    if (!this.drag) return;
+    this.setPromptHeight(this.drag.startHeight + (this.drag.startY - event.clientY));
+  }
+
+  protected gripUp(event: PointerEvent): void {
+    if (!this.drag) return;
+    (event.target as HTMLElement).classList.remove('dragging');
+    this.drag = null;
+    writePromptHeight(this.promptHeight());
+  }
+
+  protected gripKey(event: KeyboardEvent): void {
+    const box = this.box()?.nativeElement;
+    if (!box) return;
+    const step = event.shiftKey ? 40 : 10;
+    const current = this.promptHeight() ?? box.getBoundingClientRect().height;
+    if (event.key === 'ArrowUp') this.setPromptHeight(current + step);
+    else if (event.key === 'ArrowDown') this.setPromptHeight(current - step);
+    else if (event.key === 'Home' || event.key === 'Escape') this.promptHeight.set(null);
+    else return;
+    event.preventDefault();
+    writePromptHeight(this.promptHeight());
+  }
+
+  private setPromptHeight(px: number): void {
+    this.promptHeight.set(Math.round(Math.min(Chat.MAX_PROMPT, Math.max(Chat.MIN_PROMPT, px))));
   }
 
   /** Enter sends; Shift+Enter inserts a newline. */
@@ -405,7 +476,7 @@ export class Chat {
     const box = this.box()?.nativeElement;
     if (box) {
       box.value = '';
-      box.style.height = 'auto';
+      if (this.promptHeight() === null) box.style.height = 'auto';
     }
     await this.runTurn(text);
     box?.focus();
@@ -485,6 +556,26 @@ export class Chat {
 
   private append(entry: Entry): void {
     this.entries.update((list) => [...list, entry]);
+  }
+}
+
+const PROMPT_HEIGHT_STORAGE = 'chat-prompt-height';
+
+function readPromptHeight(): number | null {
+  try {
+    const v = Number(localStorage.getItem(PROMPT_HEIGHT_STORAGE));
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePromptHeight(px: number | null): void {
+  try {
+    if (px === null) localStorage.removeItem(PROMPT_HEIGHT_STORAGE);
+    else localStorage.setItem(PROMPT_HEIGHT_STORAGE, String(px));
+  } catch {
+    // Storage blocked: the height still applies for this page load.
   }
 }
 
