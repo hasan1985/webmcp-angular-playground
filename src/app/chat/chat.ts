@@ -3,14 +3,18 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  afterRenderEffect,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
+import {DomSanitizer} from '@angular/platform-browser';
 import type Anthropic from '@anthropic-ai/sdk';
 
 import {AgentTurn} from '../agent-turn';
-import {APP_CONTEXT_TOOL, DEFAULT_MODEL, describeError, runTurn, type Entry} from './agent';
+import {APP_CONTEXT_TOOL, DEFAULT_MODEL, describeError, runTurn, type Entry, type StreamSupport} from './agent';
+import {renderMarkdown} from './markdown';
 import {discoverTools, isWebMcpAvailable, runTool} from './webmcp-bridge';
 
 const KEY_STORAGE = 'anthropic-api-key';
@@ -74,11 +78,12 @@ const URL_STORAGE = 'anthropic-base-url';
           </p>
         </form>
       } @else {
-        <div class="log">
+        <div class="logwrap">
+        <div class="log" #log (scroll)="onScroll()">
           @for (entry of entries(); track $index) {
             @switch (entry.kind) {
               @case ('user') { <div class="msg user">{{ entry.text }}</div> }
-              @case ('assistant') { <div class="msg bot">{{ entry.text }}</div> }
+              @case ('assistant') { <div class="msg bot md" [innerHTML]="markdown(entry.text)"></div> }
               @case ('error') { <div class="msg err">{{ entry.text }}</div> }
               @case ('tool') {
                 <details class="tool" [class.failed]="entry.isError">
@@ -102,13 +107,27 @@ const URL_STORAGE = 'anthropic-base-url';
               }
             </p>
           }
-          @if (busy()) { <div class="msg bot pending">thinking…</div> }
+          @if (streaming() !== null) {
+            <div class="msg bot md streaming" [innerHTML]="markdown(streaming()!)"></div>
+          } @else if (busy()) {
+            <div class="msg bot pending">thinking…</div>
+          }
+        </div>
+
+        @if (!pinned()) {
+          <button type="button" class="jump" (click)="scrollToBottom(true)">↓ new messages</button>
+        }
         </div>
 
         <form class="ask" (submit)="send($event)">
-          <input [value]="draft()" (input)="draft.set($any($event.target).value)"
-                 [disabled]="busy()" placeholder="Ask the agent…" />
-          <button type="submit" [disabled]="busy() || !draft().trim()">Send</button>
+          <textarea #box rows="1" [value]="draft()" (input)="onDraft($any($event.target))"
+                    (keydown.enter)="onEnter($event)" [disabled]="busy()"
+                    placeholder="Ask the agent… (Shift+Enter for a new line)"></textarea>
+          @if (busy()) {
+            <button type="button" class="stop" (click)="stop()">Stop</button>
+          } @else {
+            <button type="submit" [disabled]="!draft().trim()">Send</button>
+          }
         </form>
         <div class="sessionbar">
           <button class="ghost" [disabled]="busy()" (click)="newChat()">New chat</button>
@@ -135,7 +154,34 @@ const URL_STORAGE = 'anthropic-base-url';
     .mode { font-size: .8rem; padding: .35rem .75rem; white-space: nowrap; }
     .mode.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
     .modehint { font-size: .75rem; color: var(--muted); line-height: 1.4; }
+    .logwrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .log { flex: 1; overflow-y: auto; padding: 1rem; display: grid; gap: .625rem; align-content: start; }
+    .jump {
+      position: absolute; bottom: .75rem; left: 50%; transform: translateX(-50%);
+      z-index: 1; font-size: .75rem; padding: .3rem .75rem; white-space: nowrap;
+      border-radius: 999px; background: var(--accent); color: var(--surface); border: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,.18);
+    }
+    .md { white-space: normal; }
+    .md p { margin: 0; }
+    .md p + p, .md p + ul, .md p + ol, .md ul + p, .md ol + p, .md pre + p, .md p + pre { margin-top: .5rem; }
+    .md .h1, .md .h2, .md .h3 { font-weight: 600; }
+    .md ul, .md ol { margin: .25rem 0 0; padding-left: 1.25rem; }
+    .md li { margin: .15rem 0; }
+    .md code { font-size: .85em; background: var(--surface-2); padding: .05em .3em; border-radius: .25rem; color: var(--accent-2); }
+    .md pre.code {
+      margin: .5rem 0 0; padding: .5rem .625rem; border-radius: .5rem; overflow-x: auto;
+      background: var(--surface-2); border: 1px solid var(--border); color: inherit; white-space: pre;
+    }
+    .md pre.code code { background: none; padding: 0; color: inherit; font-size: .8rem; }
+    .md .url { color: var(--muted); font-size: .85em; word-break: break-all; }
+    .streaming::after {
+      content: ''; display: inline-block; width: .5em; height: 1em; margin-left: .15em;
+      vertical-align: text-bottom; background: currentColor; opacity: .6;
+      animation: blink 1s steps(2) infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .streaming::after { animation: none; } }
     .empty { color: var(--muted); font-size: .85rem; line-height: 1.6; margin: 0; }
     .msg { padding: .5rem .75rem; border-radius: .625rem; font-size: .875rem; line-height: 1.5; white-space: pre-wrap; }
     .user { background: var(--accent-soft); color: var(--accent); justify-self: end; max-width: 85%; }
@@ -151,8 +197,13 @@ const URL_STORAGE = 'anthropic-base-url';
     .tool code { color: var(--accent-2); }
     pre { margin: .5rem 0 0; white-space: pre-wrap; word-break: break-word; color: var(--muted); }
     .result { color: inherit; }
-    form.ask { display: flex; gap: .5rem; padding: 1rem; border-top: 1px solid var(--border); }
-    form.ask input { flex: 1; min-width: 0; }
+    form.ask { display: flex; gap: .5rem; padding: 1rem; border-top: 1px solid var(--border); align-items: flex-end; }
+    form.ask textarea {
+      flex: 1; min-width: 0; resize: none; max-height: 10rem; overflow-y: auto;
+      padding: .5rem .75rem; border-radius: .5rem; border: 1px solid var(--border);
+      background: var(--surface); color: inherit; font: inherit; line-height: 1.4;
+    }
+    .stop { border-color: var(--danger); color: var(--danger); }
     .keyform { padding: 1rem; display: grid; gap: .5rem; }
     label { font-size: .8rem; color: var(--muted); }
     .opt { opacity: .6; font-style: italic; }
@@ -183,6 +234,16 @@ export class Chat {
   protected readonly toolNames = signal<string[]>([]);
   protected readonly hasKey = signal(readKey() !== null);
   protected readonly webMcpEnabled = inject(AgentTurn).webMcpEnabled;
+  /** The assistant reply currently arriving, or `null` between replies. */
+  protected readonly streaming = signal<string | null>(null);
+  /** True while the log is scrolled to (near) the bottom, so new content should keep it there. */
+  protected readonly pinned = signal(true);
+
+  private readonly log = viewChild<ElementRef<HTMLElement>>('log');
+  private readonly box = viewChild<ElementRef<HTMLTextAreaElement>>('box');
+  private readonly sanitizer = inject(DomSanitizer);
+  private readonly streamSupport: {value: StreamSupport} = {value: null};
+  private abort: AbortController | null = null;
 
   private history: Anthropic.MessageParam[] = [];
 
@@ -202,7 +263,6 @@ export class Chat {
    * absence.
    */
   private appContext: string | null = null;
-  private readonly host = inject(ElementRef<HTMLElement>);
   private readonly agentTurn = inject(AgentTurn);
 
   constructor() {
@@ -216,6 +276,55 @@ export class Chat {
     this.agentTurn.requests$
       .pipe(takeUntilDestroyed(inject(DestroyRef)))
       .subscribe((context) => void this.runRequestedTurn(context));
+
+    // Follow new content only while the reader is at the bottom. Reading these
+    // signals here is what re-runs the effect after every entry or delta renders.
+    afterRenderEffect(() => {
+      this.entries();
+      this.streaming();
+      if (this.pinned()) this.scrollToBottom(false);
+    });
+  }
+
+  /** Assistant text is model output: rendered by our own escaping renderer, then trusted. */
+  protected markdown(text: string) {
+    return this.sanitizer.bypassSecurityTrustHtml(renderMarkdown(text));
+  }
+
+  protected onScroll(): void {
+    const el = this.log()?.nativeElement;
+    if (!el) return;
+    this.pinned.set(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+  }
+
+  /**
+   * Programmatic follows are instant: a smooth scroll fires intermediate `scroll`
+   * events that read as "not at bottom" and would un-pin the reader mid-animation.
+   * Only the reader's own "↓ new messages" click animates.
+   */
+  protected scrollToBottom(force: boolean): void {
+    const el = this.log()?.nativeElement;
+    if (!el) return;
+    if (force) this.pinned.set(true);
+    el.scrollTo({top: el.scrollHeight, behavior: force ? 'smooth' : 'instant'});
+  }
+
+  protected onDraft(box: HTMLTextAreaElement): void {
+    this.draft.set(box.value);
+    box.style.height = 'auto';
+    box.style.height = `${Math.min(box.scrollHeight, 160)}px`;
+  }
+
+  /** Enter sends; Shift+Enter inserts a newline. */
+  protected onEnter(event: Event): void {
+    const key = event as KeyboardEvent;
+    if (key.shiftKey || key.isComposing) return;
+    event.preventDefault();
+    void this.send(event);
+  }
+
+  protected stop(): void {
+    this.abort?.abort();
   }
 
   private async refreshTools(): Promise<void> {
@@ -254,6 +363,7 @@ export class Chat {
     this.history = [];
     this.conversationId = newConversationId();
     this.appContext = null;
+    this.pinned.set(true);
   }
 
   protected forgetKey(): void {
@@ -290,7 +400,15 @@ export class Chat {
     if (!text || !readKey() || this.busy()) return;
 
     this.draft.set('');
+    // Clear the element directly: `[value]` only writes when the bound value
+    // changes, and the DOM value was last written by the user, not by us.
+    const box = this.box()?.nativeElement;
+    if (box) {
+      box.value = '';
+      box.style.height = 'auto';
+    }
     await this.runTurn(text);
+    box?.focus();
   }
 
   /**
@@ -323,9 +441,11 @@ export class Chat {
     if (!apiKey) return;
 
     this.append({kind: 'user', text});
+    this.pinned.set(true);           // sending always brings the reader to the bottom
     this.busy.set(true);
     // Locks the board for the duration, whichever path started this turn.
     this.agentTurn.running.set(true);
+    this.abort = new AbortController();
 
     try {
       this.history = await runTurn({
@@ -338,28 +458,31 @@ export class Chat {
         history: this.history,
         userMessage: text,
         onEntry: (entry) => this.append(entry),
+        onDelta: (delta) =>
+          this.streaming.update((cur) => (delta === null ? null : (cur ?? '') + delta)),
+        streamSupport: this.streamSupport,
+        signal: this.abort.signal,
       });
     } catch (error) {
       // `history` is only assigned on success, so a failed turn leaves the model's
       // history untouched — but the user's message is already in the visible log.
       // describeError() says so, otherwise the transcript quietly lies about what
       // the model has seen.
-      this.append({kind: 'error', text: describeError(error)});
+      this.append({
+        kind: 'error',
+        text: this.abort.signal.aborted ? 'Stopped.\n\nYour message was not sent.' : describeError(error),
+      });
     } finally {
+      this.streaming.set(null);
       this.busy.set(false);
       this.agentTurn.running.set(false);
+      this.abort = null;
       void this.refreshTools();
     }
   }
 
   private append(entry: Entry): void {
     this.entries.update((list) => [...list, entry]);
-    // Keep the newest entry in view; a long transcript otherwise leaves the reader
-    // staring at the top of the conversation.
-    queueMicrotask(() => {
-      const log = this.host.nativeElement.querySelector('.log');
-      if (log) log.scrollTop = log.scrollHeight;
-    });
   }
 }
 

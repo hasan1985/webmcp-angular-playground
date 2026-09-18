@@ -101,12 +101,26 @@ export function describeError(error: unknown): string {
   return `${(error as Error)?.message ?? String(error)}\n\nYour message was not sent.`;
 }
 
+/** The local proxy answers `400 streaming is not implemented` — nothing else does. */
+function isStreamingUnsupported(error: unknown): boolean {
+  const status = (error as {status?: number})?.status;
+  const message = String((error as Error)?.message ?? '');
+  return status === 400 && /stream/i.test(message);
+}
+
 /** What the UI renders. Tool activity is surfaced so the demo is legible. */
 export type Entry =
   | {kind: 'user'; text: string}
   | {kind: 'assistant'; text: string}
   | {kind: 'tool'; name: string; input: unknown; result: string; isError: boolean}
   | {kind: 'error'; text: string};
+
+/**
+ * Whether the endpoint streams. `null` = not known yet: try streaming, and if the
+ * server rejects it (the local proxy answers 400 on `stream: true`), remember that
+ * for the rest of the session. Anthropic itself always streams.
+ */
+export type StreamSupport = boolean | null;
 
 export interface RunOptions {
   apiKey: string;
@@ -139,7 +153,17 @@ export interface RunOptions {
   userMessage: string;
   /** Called as the turn progresses, so the UI can stream activity in. */
   onEntry: (entry: Entry) => void;
+  /**
+   * Called with each text delta while an assistant reply streams, and with `null`
+   * when that reply is complete. The UI grows one bubble as tokens arrive, then
+   * `onEntry` delivers the finished text. Absent when the endpoint cannot stream.
+   */
+  onDelta?: (delta: string | null) => void;
+  /** Streaming capability, learned once per session. See `StreamSupport`. */
+  streamSupport?: {value: StreamSupport};
   signal?: AbortSignal;
+  /** Test seam: a `fetch` for the SDK to use instead of the global one. */
+  fetch?: typeof globalThis.fetch;
 }
 
 /**
@@ -162,13 +186,17 @@ export async function runTurn(options: RunOptions): Promise<Anthropic.MessagePar
     useTools = true,
     userMessage,
     onEntry,
+    onDelta,
+    streamSupport = {value: null},
     signal,
+    fetch: fetchImpl,
   } = options;
 
   const client = new Anthropic({
     apiKey,
     ...(baseUrl ? {baseURL: baseUrl} : {}),
     ...(conversationId ? {defaultHeaders: {'X-Conversation-Id': conversationId}} : {}),
+    ...(fetchImpl ? {fetch: fetchImpl} : {}),
     // Required to call the API from a browser. Acceptable here because the key is
     // the user's own, entered at runtime and never persisted beyond this tab —
     // see the warning in the chat panel. Do NOT do this in a product: ship a
@@ -183,18 +211,40 @@ export async function runTurn(options: RunOptions): Promise<Anthropic.MessagePar
   const tools = useTools ? await discoverTools() : undefined;
   const basePrompt = useTools ? SYSTEM_PROMPT : PLAIN_SYSTEM_PROMPT;
 
+  const params = {
+    model,
+    max_tokens: 16000,
+    system: appContext ? `${basePrompt}\n\n---\n\n${appContext}` : basePrompt,
+    ...(tools ? {tools} : {}),
+  };
+
   // Bounded so a confused model cannot loop forever on the user's dime.
   for (let iteration = 0; iteration < 10; iteration++) {
-    const response = await client.messages.create(
-      {
-        model,
-        max_tokens: 16000,
-        system: appContext ? `${basePrompt}\n\n---\n\n${appContext}` : basePrompt,
-        ...(tools ? {tools} : {}),
-        messages,
-      },
-      {signal},
-    );
+    let response: Anthropic.Message;
+
+    if (streamSupport.value !== false && onDelta) {
+      // Text arrives token by token; tool_use blocks arrive whole at the end of the
+      // stream, so the loop below is the same either way.
+      try {
+        const stream = client.messages.stream({...params, messages}, {signal});
+        stream.on('text', (delta) => onDelta(delta));
+        response = await stream.finalMessage();
+        streamSupport.value = true;
+      } catch (error) {
+        if (streamSupport.value === null && isStreamingUnsupported(error)) {
+          // Learned once: this endpoint does not stream. Fall back for the session.
+          streamSupport.value = false;
+          onDelta(null);
+          response = await client.messages.create({...params, messages}, {signal});
+        } else {
+          onDelta(null);
+          throw error;
+        }
+      }
+      onDelta(null);
+    } else {
+      response = await client.messages.create({...params, messages}, {signal});
+    }
 
     for (const block of response.content) {
       if (block.type === 'text' && block.text.trim()) {

@@ -188,3 +188,11 @@ directly. Calling `execute` yourself skips `runInInjectionContext`, so every
 - **The chat uses a manual tool loop**, not the SDK's tool runner: the runner wants
   local `run` functions declared up front, but these tools are discovered at runtime
   from the page.
+- **The chat streams when it can.** It tries `messages.stream()` first; if the
+  endpoint answers `400` to `stream: true` (the local proxy does) it falls back to
+  `create()` for the rest of the session. Tokens grow one bubble as they arrive;
+  `Stop` aborts the turn. Auto-scroll follows new content only while you are at the
+  bottom — scroll up to read and a **↓ new messages** pill appears instead.
+- **Assistant replies are rendered as markdown** by `src/app/chat/markdown.ts`, a
+  60-line renderer that escapes everything first and never emits anchors or raw
+  HTML. `marked` would be the largest thing in this demo.
