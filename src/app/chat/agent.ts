@@ -81,9 +81,12 @@ export function describeError(error: unknown, baseUrl?: string): string {
   }
   if (status === 404) {
     return [
-      'The endpoint returned 404 for /v1/messages.',
+      `${host} has nothing at the path the SDK asked for (404).`,
       '',
-      'A custom API URL has to speak the Anthropic Messages API. An',
+      'The SDK adds /v1/… itself, so the API URL should be just the origin —',
+      'for the local proxy, http://127.0.0.1:8080 with no /v1 on the end.',
+      '',
+      'If the URL is right, the server has to speak the Anthropic Messages API. An',
       'OpenAI-compatible endpoint (/v1/chat/completions) is a different shape and',
       'will not work here.',
       '',
@@ -128,6 +131,16 @@ export function describeError(error: unknown, baseUrl?: string): string {
  * summary for the UI; rejects with the same errors `runTurn` would, so
  * `describeError` explains them the same way.
  */
+/**
+ * The SDK appends `/v1/…` itself, so a URL typed with a trailing `/v1` — the most
+ * natural thing to copy from a curl example — would hit `/v1/v1/models` and 404.
+ * Strip it, and any trailing slash.
+ */
+export function normalizeBaseUrl(raw: string): string | undefined {
+  const trimmed = raw.trim().replace(/\/+$/, '').replace(/\/v1$/i, '').replace(/\/+$/, '');
+  return trimmed || undefined;
+}
+
 export async function probeConnection(options: {
   apiKey: string;
   baseUrl?: string;

@@ -13,7 +13,7 @@ import {DomSanitizer} from '@angular/platform-browser';
 import type Anthropic from '@anthropic-ai/sdk';
 
 import {AgentTurn} from '../agent-turn';
-import {APP_CONTEXT_TOOL, DEFAULT_MODEL, describeError, probeConnection, runTurn, type Entry, type StreamSupport} from './agent';
+import {APP_CONTEXT_TOOL, DEFAULT_MODEL, describeError, normalizeBaseUrl, probeConnection, runTurn, type Entry, type StreamSupport} from './agent';
 import {renderMarkdown} from './markdown';
 import {discoverTools, isWebMcpAvailable, runTool} from './webmcp-bridge';
 
@@ -71,9 +71,9 @@ const URL_STORAGE = 'anthropic-base-url';
                  (input)="urlDraft.set($any($event.target).value)"
                  placeholder="https://api.anthropic.com" autocomplete="off" />
           <p class="warn">
-            Leave blank for Anthropic. A custom URL must speak the <em>Anthropic
-            Messages API</em> — an OpenAI-compatible proxy is a different shape and
-            will not work.
+            Leave blank for Anthropic. Otherwise just the origin — the SDK adds
+            <code>/v1/…</code> itself — and it must speak the <em>Anthropic Messages
+            API</em>; an OpenAI-compatible proxy is a different shape and will not work.
           </p>
 
           <button type="submit" [disabled]="!keyDraft().trim() || connecting()">
@@ -431,7 +431,7 @@ export class Chat {
     event.preventDefault();
     const key = this.keyDraft().trim();
     if (!key || this.connecting()) return;
-    const url = this.urlDraft().trim().replace(/\/+$/, '') || undefined;
+    const url = normalizeBaseUrl(this.urlDraft());
 
     this.connecting.set(true);
     this.connectError.set(null);
@@ -441,6 +441,7 @@ export class Chat {
       if (url) sessionStorage.setItem(URL_STORAGE, url);
       else sessionStorage.removeItem(URL_STORAGE);
       this.connectedTo.set(host);
+      this.urlDraft.set(url ?? '');       // show what was actually saved, e.g. without a typed /v1
       this.keyDraft.set('');
       this.hasKey.set(true);
     } catch (error) {

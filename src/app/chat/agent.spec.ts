@@ -1,4 +1,4 @@
-import {probeConnection, runTurn, type Entry, type StreamSupport} from './agent';
+import {normalizeBaseUrl, probeConnection, runTurn, type Entry, type StreamSupport} from './agent';
 
 /**
  * Drives `runTurn` through the real Anthropic SDK against a fake `fetch`, so the
@@ -114,5 +114,15 @@ describe('probeConnection', () => {
       fetch: async () => { calls++; return new Response(JSON.stringify({error: {type: 'authentication_error', message: 'Invalid API key'}}), {status: 401, headers: {'content-type': 'application/json'}}); },
     })).toBeRejectedWith(jasmine.objectContaining({status: 401}));
     expect(calls).toBe(1);
+  });
+});
+
+describe('normalizeBaseUrl', () => {
+  it('strips a trailing /v1 and slashes, since the SDK adds /v1 itself', () => {
+    expect(normalizeBaseUrl('http://127.0.0.1:8080/v1')).toBe('http://127.0.0.1:8080');
+    expect(normalizeBaseUrl('http://127.0.0.1:8080/v1/')).toBe('http://127.0.0.1:8080');
+    expect(normalizeBaseUrl('http://127.0.0.1:8080/')).toBe('http://127.0.0.1:8080');
+    expect(normalizeBaseUrl('  ')).toBeUndefined();
+    expect(normalizeBaseUrl('https://api.example.com/proxy')).toBe('https://api.example.com/proxy');
   });
 });
