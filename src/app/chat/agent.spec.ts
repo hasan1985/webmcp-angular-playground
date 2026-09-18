@@ -1,4 +1,4 @@
-import {runTurn, type Entry, type StreamSupport} from './agent';
+import {probeConnection, runTurn, type Entry, type StreamSupport} from './agent';
 
 /**
  * Drives `runTurn` through the real Anthropic SDK against a fake `fetch`, so the
@@ -88,5 +88,31 @@ describe('runTurn streaming', () => {
     requests = [];
     await run(support, () => {});
     expect(requests.map((r) => r.stream)).toEqual([false]);
+  });
+});
+
+describe('probeConnection', () => {
+  const models = (n: number) =>
+    new Response(JSON.stringify({data: Array.from({length: n}, (_, i) => ({id: `m${i}`, type: 'model', display_name: `m${i}`, created_at: ''})), has_more: false, first_id: null, last_id: null}), {
+      status: 200, headers: {'content-type': 'application/json'},
+    });
+
+  it('resolves with the host and model count when the endpoint accepts the key', async () => {
+    const urls: string[] = [];
+    const result = await probeConnection({
+      apiKey: 'k', baseUrl: 'http://proxy.test:8080',
+      fetch: async (input) => { urls.push(String(input instanceof Request ? input.url : input)); return models(3); },
+    });
+    expect(result).toEqual({host: 'proxy.test:8080', models: 3});
+    expect(urls[0]).toContain('/v1/models');
+  });
+
+  it('rejects with a 401 error the UI can describe, without retrying', async () => {
+    let calls = 0;
+    await expectAsync(probeConnection({
+      apiKey: 'wrong', baseUrl: 'http://proxy.test:8080',
+      fetch: async () => { calls++; return new Response(JSON.stringify({error: {type: 'authentication_error', message: 'Invalid API key'}}), {status: 401, headers: {'content-type': 'application/json'}}); },
+    })).toBeRejectedWith(jasmine.objectContaining({status: 401}));
+    expect(calls).toBe(1);
   });
 });

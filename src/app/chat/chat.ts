@@ -13,7 +13,7 @@ import {DomSanitizer} from '@angular/platform-browser';
 import type Anthropic from '@anthropic-ai/sdk';
 
 import {AgentTurn} from '../agent-turn';
-import {APP_CONTEXT_TOOL, DEFAULT_MODEL, describeError, runTurn, type Entry, type StreamSupport} from './agent';
+import {APP_CONTEXT_TOOL, DEFAULT_MODEL, describeError, probeConnection, runTurn, type Entry, type StreamSupport} from './agent';
 import {renderMarkdown} from './markdown';
 import {discoverTools, isWebMcpAvailable, runTool} from './webmcp-bridge';
 
@@ -32,6 +32,11 @@ const URL_STORAGE = 'anthropic-base-url';
           {{ webMcpEnabled() ? 'sent to the agent' : 'registered, not sent' }}
         </span>
       </header>
+      @if (connectedTo(); as host) {
+        <div class="connected" [title]="'GET /v1/models answered — the key and URL work.'">
+          <span class="dot"></span> connected to <code>{{ host }}</code>
+        </div>
+      }
 
       <div class="modebar">
         <button type="button" class="mode" [class.on]="webMcpEnabled()"
@@ -71,7 +76,12 @@ const URL_STORAGE = 'anthropic-base-url';
             will not work.
           </p>
 
-          <button type="submit" [disabled]="!keyDraft().trim()">Connect</button>
+          <button type="submit" [disabled]="!keyDraft().trim() || connecting()">
+            {{ connecting() ? 'Connecting…' : 'Connect' }}
+          </button>
+          @if (connectError(); as err) {
+            <p class="msg err connecterr">{{ err }}</p>
+          }
           <p class="warn">
             Demo only. Your key is kept in this tab's <code>sessionStorage</code> and sent
             straight from the browser to Anthropic. A real app keeps the key on a server.
@@ -161,6 +171,13 @@ const URL_STORAGE = 'anthropic-base-url';
     .mode { font-size: .8rem; padding: .35rem .75rem; white-space: nowrap; }
     .mode.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
     .modehint { font-size: .75rem; color: var(--muted); line-height: 1.4; }
+    .connected {
+      display: flex; align-items: center; gap: .4rem; padding: .35rem 1rem;
+      font-size: .72rem; color: var(--muted); border-bottom: 1px solid var(--border);
+    }
+    .connected code { color: var(--accent-2); }
+    .dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--accent-2); }
+    .connecterr { white-space: pre-wrap; font-size: .8rem; }
     .logwrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .log { flex: 1; overflow-y: auto; padding: 1rem; display: grid; gap: .625rem; align-content: start; }
     .jump {
@@ -252,6 +269,10 @@ export class Chat {
   protected readonly toolNames = signal<string[]>([]);
   protected readonly hasKey = signal(readKey() !== null);
   protected readonly webMcpEnabled = inject(AgentTurn).webMcpEnabled;
+  protected readonly connecting = signal(false);
+  protected readonly connectError = signal<string | null>(null);
+  /** Host that answered the connection probe; shown under the header. */
+  protected readonly connectedTo = signal<string | null>(null);
   /** The assistant reply currently arriving, or `null` between replies. */
   protected readonly streaming = signal<string | null>(null);
   /** True while the log is scrolled to (near) the bottom, so new content should keep it there. */
@@ -402,19 +423,31 @@ export class Chat {
     this.toolNames.set((await discoverTools()).map((t) => t.name));
   }
 
-  protected saveKey(event: Event): void {
+  /**
+   * Connect = prove it, then save it. One `GET /v1/models` with the typed key and
+   * URL; a wrong key fails here, on the form, instead of on the first message.
+   */
+  protected async saveKey(event: Event): Promise<void> {
     event.preventDefault();
     const key = this.keyDraft().trim();
-    if (!key) return;
-    sessionStorage.setItem(KEY_STORAGE, key);
-    const url = this.urlDraft().trim().replace(/\/+$/, '');
-    if (url) {
-      sessionStorage.setItem(URL_STORAGE, url);
-    } else {
-      sessionStorage.removeItem(URL_STORAGE);
+    if (!key || this.connecting()) return;
+    const url = this.urlDraft().trim().replace(/\/+$/, '') || undefined;
+
+    this.connecting.set(true);
+    this.connectError.set(null);
+    try {
+      const {host} = await probeConnection({apiKey: key, baseUrl: url});
+      sessionStorage.setItem(KEY_STORAGE, key);
+      if (url) sessionStorage.setItem(URL_STORAGE, url);
+      else sessionStorage.removeItem(URL_STORAGE);
+      this.connectedTo.set(host);
+      this.keyDraft.set('');
+      this.hasKey.set(true);
+    } catch (error) {
+      this.connectError.set(describeError(error, url).replace(/\n\nYour message was not sent.*$/s, ''));
+    } finally {
+      this.connecting.set(false);
     }
-    this.keyDraft.set('');
-    this.hasKey.set(true);
   }
 
   /**
@@ -441,6 +474,8 @@ export class Chat {
     sessionStorage.removeItem(KEY_STORAGE);
     sessionStorage.removeItem(URL_STORAGE);
     this.hasKey.set(false);
+    this.connectedTo.set(null);
+    this.connectError.set(null);
     this.newChat();
   }
 

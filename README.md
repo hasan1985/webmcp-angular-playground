@@ -102,7 +102,10 @@ has to finish first. Use a `.then` chain, not top-level `await`: Angular's defau
 browserslist targets reject it.
 
 Playing by hand needs nothing. The chat panel needs an Anthropic API key, entered
-at runtime and kept in that tab's `sessionStorage`. It is sent straight from the
+at runtime and kept in that tab's `sessionStorage`. **Connect** proves it before
+saving — one `GET /v1/models` with the typed key and URL, no tokens spent — so a
+wrong key or a blank URL fails on the form with an explanation, and a good one
+shows *connected to \<host\>* under the header. It is sent straight from the
 browser to the API (`dangerouslyAllowBrowser`), which is fine for a local demo and
 **wrong for a product** — ship a backend that holds the key.
 

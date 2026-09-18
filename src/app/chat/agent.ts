@@ -119,6 +119,34 @@ export function describeError(error: unknown, baseUrl?: string): string {
   return `${(error as Error)?.message ?? String(error)}\n\nYour message was not sent.`;
 }
 
+/**
+ * Proves a key and endpoint work before the chat is shown, so a wrong key fails at
+ * Connect rather than on the first message.
+ *
+ * `GET /v1/models` is the probe: Anthropic and the local proxy both serve it, it
+ * costs no tokens, and it answers 401 to a bad key. Resolves with a one-line
+ * summary for the UI; rejects with the same errors `runTurn` would, so
+ * `describeError` explains them the same way.
+ */
+export async function probeConnection(options: {
+  apiKey: string;
+  baseUrl?: string;
+  fetch?: typeof globalThis.fetch;
+}): Promise<{host: string; models: number}> {
+  const client = new Anthropic({
+    apiKey: options.apiKey,
+    ...(options.baseUrl ? {baseURL: options.baseUrl} : {}),
+    ...(options.fetch ? {fetch: options.fetch} : {}),
+    dangerouslyAllowBrowser: true,
+    maxRetries: 0,          // a wrong key should fail once, not after three retries
+  });
+  const page = await client.models.list({limit: 20});
+  return {
+    host: new URL(options.baseUrl ?? 'https://api.anthropic.com').host,
+    models: page.data.length,
+  };
+}
+
 /** The local proxy answers `400 streaming is not implemented` — nothing else does. */
 function isStreamingUnsupported(error: unknown): boolean {
   const status = (error as {status?: number})?.status;
